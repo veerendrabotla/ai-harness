@@ -294,7 +294,7 @@ External-only (not in the 20): GCP/terraform apply, Resend key, Sentry/PostHog -
 
 ### Execution log
 - [x] 1 git  - [x] 2 audit  - [x] 3 e2e battery  - [x] 4 CI docker  - [x] 5 terraform
-- [x] 6 bounds  - [x] 7 sweeper  - [ ] 8 reviewer  - [ ] 9 adapters  - [ ] 10 email  - [x] 11 sandbox
+- [x] 6 bounds  - [x] 7 sweeper  - [x] 8 reviewer  - [x] 9 adapters  - [x] 10 email  - [x] 11 sandbox
 - [ ] 12 bridge-proxy  - [ ] 13 load  - [ ] 14 hygiene
 - [ ] 15 prompt  - [ ] 16 pricing+bench  - [ ] 17 rules+cases  - [ ] 18 enterprise  - [ ] 19 guides  - [ ] 20 release
 
@@ -355,7 +355,21 @@ External-only (not in the 20): GCP/terraform apply, Resend key, Sentry/PostHog -
   - E2E: new `scripts/e2e-stuck-run-sweep.ts` + `npm run e2e:sweep` — seeds user→workspace→project→task+run pairs (stale run backdated 16min, fresh control), runs the real sweep with the real `EventPublisher` against the live DB, asserts stale run/task `INTERRUPTED` + `pauseRequested` cleared + persisted `RUN_INTERRUPTED` event (`reason: WORKER_LOST`) + fresh pair untouched, full cleanup. **PASSED** ("ALL STUCK-RUN SWEEP CHECKS PASSED", exactly 1 run interrupted).
   - Gates: typecheck 0 · lint 0 · agent-runtime + worker suites **10 files / 60 tests** green.
 
+### PHASE 13 execution log (tasks 8 + 9 + 10) — reviewer gate + adapter wire contracts + password-reset email E2E
 
+- [x] 8 reviewer gate flip — new `backend/packages/agent-runtime/src/reviewer-gate.test.ts` (**4/4**), drives the real private `executionLoop` (empty APPROVED plan → verification → review) with shadowed subsystems (`runReview`/`verification.verify`/`state.transition`/`events`/`fireHooks`/`checkpoints`/`runSecurityScan` + mocked prisma): blocking findings + `blockOnReviewFindings: true` → rejects `{name: "REVIEW_BLOCKED"}` + `RUN_BLOCKED_BY_REVIEW` published + no `REVIEWING→COMPLETED` transition; blocking + policy OFF → releases `COMPLETED` (advisory); empty blocking → `COMPLETED`; review skipped (null) → `COMPLETED`. **Wording note**: audit said "park at approval" — actual semantics: the gate throws `REVIEW_BLOCKED` (registered failure_code) which the run driver surfaces as a failed run; parking-at-approval is the separate plan-approval flow. Tested behavior documented as-is.
+- [x] 9 adapter wire contracts — new `backend/packages/model-adapters/src/wire-contract.test.ts` (**8/8**) against local mock HTTP servers: Ollama `POST /api/chat` request shape (system+user messages, `format:"json"` for PLAN, `num_predict`/`temperature`) + response mapping (usage/finishReason/model), `/api/tags` health, `NO_BASE_URL`, 500 → retryable `PROVIDER_ERROR`; Google `models/{model}:generateContent` URL + systemInstruction + generationConfig body + usage/finishReason mapping, health, `NO_CREDENTIAL`, 503 → retryable. **Fixes the tests forced**:
+  - both adapters' catch blocks **swallowed their own AdapterError codes** (`NO_BASE_URL`/`NO_CREDENTIAL` rethrown as generic `PROVIDER_ERROR`) → `if (err instanceof AdapterError) throw err` in `generate`+`stream` of both adapters.
+  - Google adapter gained `metadata.baseUrl` → `httpOptions.baseUrl` passthrough (mirrors Ollama; enables proxies/emulators/mocks).
+  - documented SDK limitation in-test: `@google/genai@1.0.1` mldev converter drops `responseId` → `providerRequestId` is null on the Gemini-API (non-Vertex) path.
+- [x] 10 password-reset email E2E — new `scripts/e2e-password-reset.ts` + `npm run e2e:reset` (**20/20**): spawns a local API (`NODE_ENV=development`, `PORT=4171`, `RESEND_WEBHOOK_SECRET` set) and drives the full flow over HTTP: token row unexpired/unused; **captured dev delivery-log token sha256-hashes to the stored tokenHash** (the email carries the exact token that works); anti-enumeration (unknown email: same 200 envelope, no token emitted, no extra row); single-use consumption (`usedAt` set, reuse → `VALIDATION_ERROR`); old password 401 / new accepted; pre-reset refresh token revoked; **resend-webhook round-trip** (bad HMAC → 401, signed `email.delivered` → 200 `received:true` + `email_delivery` QUEUED → DELIVERED). **Fixes**:
+  - **ESM logger bug**: `auth-service.ts` `getLogger()` used a bare `require("pino")` → `require is not defined` under ESM (tsx, `type:module`) → silently degraded to a no-op logger, losing the dev token log AND resend failure logs → now `createRequire(import.meta.url)` (verified working: token captured on first run).
+  - `.env` `RATE_LIMIT_RESET_PER_HOUR=500` (was commented out → zod default 5/IP/hour would throttle repeated runs; matches the signup/login overrides).
+- Gates: `typecheck` 0 · `lint` 0 · `RUN_INTEGRATION=1 npm test` **EXIT 0 — 57 passed/1 skipped files, 533 passed/22 skipped tests** (first attempt had 3 contention flakes — load.test.ts 56% success, docker-isolation path-traversal, acceptance hook timeout — all 31/31 green in isolated rerun; full rerun green). Note: docker-isolation conditional skips fluctuate (22-26) between runs.
+
+
+
+### Qoder competitive analysis (2026-09) — adoption backlog (not in the 20)
 
 Prioritized from a full Qoder feature comparison; we remain ahead on the 16-state machine, policy engine, self-hosted/bridge story:
 1. **Repo Wiki** — `.aiharness/wiki/` living documentation auto-maintained by runs (Qoder's strongest adoption hook).

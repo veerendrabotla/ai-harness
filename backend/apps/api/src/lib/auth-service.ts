@@ -1,5 +1,6 @@
 import argon2 from "argon2";
 import type { PrismaClient } from "@prisma/client";
+import { createRequire } from "node:module";
 import { errors, generateOpaqueToken, getEnv } from "@ai-harness/shared";
 import {
   createUserRepository,
@@ -17,9 +18,11 @@ let _logger: { warn: (obj: unknown, msg?: string) => void; error: (obj: unknown,
 function getLogger() {
   if (!_logger) {
     try {
-      // Dynamic import to avoid circular deps at module load
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const pinoLib = require("pino");
+      // Lazy require via createRequire: `require` is not defined in ESM
+      // (the API runs as type:module under tsx), which silently degraded this
+      // logger to a no-op and dropped dev-only token logs.
+      const requireFromMeta = createRequire(import.meta.url);
+      const pinoLib = requireFromMeta("pino");
       _logger = (pinoLib.default ?? pinoLib)({ name: "auth-service", level: "warn" });
     } catch {
       // Fallback: no-op if pino unavailable at import time

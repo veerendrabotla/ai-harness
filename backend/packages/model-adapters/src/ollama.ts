@@ -84,6 +84,7 @@ export class OllamaAdapter implements ModelAdapter {
         providerType: this.providerType,
       };
     } catch (err) {
+      if (err instanceof AdapterError) throw err;
       console.error("[Ollama] Generation failed:", err);
       throw new AdapterError(this.providerType, "PROVIDER_ERROR", "Ollama generation failed", true);
     }
@@ -146,6 +147,7 @@ export class OllamaAdapter implements ModelAdapter {
         providerType: this.providerType,
       };
     } catch (err) {
+      if (err instanceof AdapterError) throw err;
       console.error("[Ollama] Streaming failed:", err);
       throw new AdapterError(this.providerType, "PROVIDER_ERROR", "Ollama streaming failed", true);
     }

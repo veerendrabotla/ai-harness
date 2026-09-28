@@ -17,7 +17,13 @@ export class GoogleAdapter implements ModelAdapter {
     if (!connection.credential) {
       throw new AdapterError(this.providerType, "NO_CREDENTIAL", "Provider connection has no credential", false);
     }
-    return new GoogleGenAI({ apiKey: connection.credential });
+    // Optional endpoint override (proxies, emulators, mock servers) — mirrors
+    // the Ollama adapter's metadata.baseUrl contract.
+    const baseUrl = connection.metadata?.["baseUrl"];
+    return new GoogleGenAI({
+      apiKey: connection.credential,
+      ...(baseUrl ? { httpOptions: { baseUrl } } : {}),
+    });
   }
 
   async healthCheck(connection: ProviderConnectionRef): Promise<HealthResult> {
@@ -74,6 +80,7 @@ export class GoogleAdapter implements ModelAdapter {
         providerType: this.providerType,
       };
     } catch (err) {
+      if (err instanceof AdapterError) throw err;
       console.error("[Google] Generation failed:", err);
       throw new AdapterError(this.providerType, "PROVIDER_ERROR", "Google generation failed: redacted", true);
     }
@@ -135,6 +142,7 @@ export class GoogleAdapter implements ModelAdapter {
         providerType: this.providerType,
       };
     } catch (err) {
+      if (err instanceof AdapterError) throw err;
       console.error("[Google] Streaming failed:", err);
       throw new AdapterError(this.providerType, "PROVIDER_ERROR", "Google streaming failed: redacted", true);
     }
