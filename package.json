@@ -34,6 +34,7 @@
     "e2e:smoke": "tsx scripts/smoke-vertical-slice.ts",
     "e2e:resilience": "tsx scripts/e2e-two-workers.ts",
     "e2e:replicas": "tsx scripts/e2e-two-replica-socket.ts",
+    "e2e:sweep": "tsx scripts/e2e-stuck-run-sweep.ts",
     "bench:replay": "tsx scripts/bench-replay.ts",
     "e2e:browser": "npm run build -w frontend && npx playwright test --config frontend/playwright.config.ts",
     "desktop:dev": "npm run dev -w desktop",

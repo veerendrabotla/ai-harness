@@ -18,6 +18,7 @@ import { buildAgentRuntime } from "@ai-harness/agent-runtime";
 import { TASK_EVENT_TYPES } from "@ai-harness/domain";
 import { MCPRegistry } from "@ai-harness/mcp-platform";
 import { buildCompositeResolver } from "./sandbox.js";
+import { sweepStuckRuns } from "./stuck-run-sweep.js";
 
 // Notification service import (duplicated to avoid cross-package dependency)
 async function sendTaskNotification(
@@ -450,29 +451,7 @@ async function main() {
 
       // ── Stuck-run recovery: runs whose worker died mid-flight ──
       try {
-        const staleCutoff = new Date(Date.now() - 15 * 60_000);
-        const stuck = await db.taskRun.findMany({
-          where: { state: { notIn: ["COMPLETED", "FAILED", "CANCELLED", "INTERRUPTED"] }, startedAt: { lt: staleCutoff } },
-          include: { task: { select: { state: true } } },
-          take: 20,
-        });
-        for (const run of stuck) {
-          await db.$transaction([
-            db.taskRun.update({ where: { id: run.id }, data: { state: "INTERRUPTED" } }),
-            db.task.update({
-              where: { id: run.taskId },
-              data: { state: "INTERRUPTED", pauseRequested: false },
-            }),
-          ]);
-          await runtime.events.publishAndEmit({
-            taskId: run.taskId,
-            runId: run.id,
-            eventType: "RUN_INTERRUPTED",
-            actorType: "SYSTEM",
-            payload: { reason: "WORKER_LOST", note: "Recoverable via resume/retry." },
-          });
-          logger.warn({ taskId: run.taskId, runId: run.id }, "stuck run marked INTERRUPTED");
-        }
+        await sweepStuckRuns({ db, events: runtime.events, logger });
       } catch (err) {
         logger.error({ err: redactValue(err instanceof Error ? err.message : err) }, "stuck-run recovery sweep failed");
       }

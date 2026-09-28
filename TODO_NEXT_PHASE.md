@@ -294,7 +294,7 @@ External-only (not in the 20): GCP/terraform apply, Resend key, Sentry/PostHog -
 
 ### Execution log
 - [x] 1 git  - [x] 2 audit  - [x] 3 e2e battery  - [x] 4 CI docker  - [x] 5 terraform
-- [ ] 6 bounds  - [ ] 7 sweeper  - [ ] 8 reviewer  - [ ] 9 adapters  - [ ] 10 email  - [x] 11 sandbox
+- [x] 6 bounds  - [x] 7 sweeper  - [ ] 8 reviewer  - [ ] 9 adapters  - [ ] 10 email  - [x] 11 sandbox
 - [ ] 12 bridge-proxy  - [ ] 13 load  - [ ] 14 hygiene
 - [ ] 15 prompt  - [ ] 16 pricing+bench  - [ ] 17 rules+cases  - [ ] 18 enterprise  - [ ] 19 guides  - [ ] 20 release
 
@@ -347,7 +347,15 @@ External-only (not in the 20): GCP/terraform apply, Resend key, Sentry/PostHog -
 - `RUN_INTEGRATION=1 npm test`: **54 files / 532 tests, 0 failed, EXIT 0**.
 - All six E2E suites green (above). Disk note: `docker image prune` + builder cache freed 12.6 GB; `docker_data.vhdx` compaction still pending (needs elevated shell — command in PHASE 6 log).
 
-### Qoder competitive analysis (2026-09) — adoption backlog (not in the 20)
+### PHASE 13 execution log (tasks 6 + 7) — bounds unit tests + stuck-run sweeper E2E
+
+- [x] 6 execution-loop bounds unit tests — new `backend/packages/agent-runtime/src/run-bounds.test.ts` (**7/7**): `DEFAULT_RUN_BOUNDS` regression anchor (30min/12/50/3); `assertBudget` passes fresh budget, throws `MAX_DURATION_EXCEEDED` past deadline, throws `MAX_TOOL_CALLS_EXCEEDED` exactly at the cap (49 ok, 50 throws), throws `MAX_MODEL_INVOCATIONS_EXCEEDED` exactly at the cap (11 ok, 12 throws); replan bound proven increment-then-check: attempt 3 proceeds into recovery (stops at providerUnavailable, NOT max-replans), attempt 4 throws `MAX_REPLANS_EXCEEDED` and `replansUsed` lands at `max+1`.
+- [x] 7 stuck-run recovery sweeper — **extracted** the inline worker block (worker.ts:451) into `backend/apps/worker/src/stuck-run-sweep.ts` (`sweepStuckRuns`, injectable `now`/`limit`) so it is testable; behavior preserved, plus the unused `include: {task.state}` now guards a real edge: **terminal task + live run → run-only interrupt** (never flips a COMPLETED/FAILED task back out of terminal).
+  - Unit: `stuck-run-sweep.test.ts` **4/4** — query shape (notIn terminal, `startedAt < now-15min`, take 20), interrupt + task park + `RUN_INTERRUPTED`/`WORKER_LOST` event + warn log, terminal-task guard (all 4 terminal states, no task update, no transaction), custom limit/clock.
+  - E2E: new `scripts/e2e-stuck-run-sweep.ts` + `npm run e2e:sweep` — seeds user→workspace→project→task+run pairs (stale run backdated 16min, fresh control), runs the real sweep with the real `EventPublisher` against the live DB, asserts stale run/task `INTERRUPTED` + `pauseRequested` cleared + persisted `RUN_INTERRUPTED` event (`reason: WORKER_LOST`) + fresh pair untouched, full cleanup. **PASSED** ("ALL STUCK-RUN SWEEP CHECKS PASSED", exactly 1 run interrupted).
+  - Gates: typecheck 0 · lint 0 · agent-runtime + worker suites **10 files / 60 tests** green.
+
+
 
 Prioritized from a full Qoder feature comparison; we remain ahead on the 16-state machine, policy engine, self-hosted/bridge story:
 1. **Repo Wiki** — `.aiharness/wiki/` living documentation auto-maintained by runs (Qoder's strongest adoption hook).
