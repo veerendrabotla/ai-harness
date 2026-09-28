@@ -314,7 +314,40 @@ curl -s http://localhost:4000/healthz
 ## 10. Known limitations
 
 - **Bridge Gateway is single-replica** (§6) — plan capacity around one instance.
-- **Cloud Sandbox execution is not implemented**; `CLOUD_SANDBOX` tools return a structured unavailable result. Local Docker sandboxing via `SANDBOX_MODE=docker` and Local Bridge execution are the working paths.
+- **Cloud Sandbox execution requires the opt-in docker.sock layer** (§11); without it, `CLOUD_SANDBOX` tools return a structured "valid root path" error. Local Docker sandboxing via `SANDBOX_MODE=docker` and Local Bridge execution are the working paths.
 - **Health checks:** `GET /healthz` and `GET /v1/health` are aliases — both return `{ status, checks.database }` with 200/503.
 - **Email delivery is deferred**: password-reset tokens are issued and hashed, but sending requires `RESEND_API_KEY` + `RESEND_FROM` (checklist §8).
 - External-only remaining work is tracked in [EXTERNAL_DEPLOYMENT_CHECKLIST.md](../../EXTERNAL_DEPLOYMENT_CHECKLIST.md); subsystem-by-subsystem state is in [IMPLEMENTATION_STATUS.md](../../IMPLEMENTATION_STATUS.md).
+
+---
+
+## 11. Docker sandbox (opt-in, single-node)
+
+The worker can execute CLOUD_SANDBOX tools (filesystem/git/terminal) inside
+ephemeral, unprivileged Docker containers — one docker run per tool call:
+
+`ash
+# .env must define the absolute host path of the shared workspace dir:
+#   SANDBOX_WORKSPACE_HOST_DIR=<repo>\.data\workspaces
+docker compose -f docker-compose.yml -f docker-compose.sandbox.yml up -d --build
+`
+
+The override (docker-compose.sandbox.yml) mounts /var/run/docker.sock into
+the worker and bind-mounts .data/workspaces at /var/lib/ai-harness/workspaces.
+Non-absolute project roots (e.g. github.com/owner/repo) are cloned once into
+that shared dir (git clone, fallback git init); absolute host roots under it
+are mapped between worker-container and host paths automatically.
+
+Sandbox containers run with --network none --read-only --cap-drop=ALL
+--pids-limit 64 --cpus 1 --memory 512m; SANDBOX_IMAGE defaults to 
+ode:22
+(full Debian image, includes git; the sandbox override pins it).
+
+> **Security:** the docker.sock mount grants the worker **root-equivalent
+> control of the Docker host**. Enable only on trusted single-node setups.
+> For hardened production, replace the socket mount with a rootless-Docker or
+> Kubernetes execution provider.
+
+Verification commands run with no network inside the container: seed the
+project with an offline 
+pm test (see scripts/e2e-agent-run.ts).

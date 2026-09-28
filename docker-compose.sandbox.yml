@@ -1,0 +1,24 @@
+# Opt-in sandbox layer (PHASE 13 #11): exposes the host Docker daemon to the
+# worker so CLOUD_SANDBOX tools actually execute (docker run per tool call).
+#
+# SECURITY: mounting /var/run/docker.sock grants the worker root-equivalent
+# control of the Docker host. Only enable this on trusted single-node setups;
+# for production prefer an isolated runner (Rootless Docker / Kubernetes).
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.sandbox.yml up -d --build
+#
+# Requires SANDBOX_WORKSPACE_HOST_DIR in .env to be the absolute host path of
+# .data/workspaces (the dir bind-mounted below), because the host Docker daemon
+# resolves -v sources on the host filesystem, not inside the worker container.
+services:
+  worker:
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./.data/workspaces:/var/lib/ai-harness/workspaces
+    environment:
+      SANDBOX_MODE: docker
+      # node:22 (not -alpine) ships git; override .env's default on purpose.
+      SANDBOX_IMAGE: node:22
+      SANDBOX_WORKSPACE_DIR: /var/lib/ai-harness/workspaces
+      SANDBOX_WORKSPACE_HOST_DIR: ${SANDBOX_WORKSPACE_HOST_DIR:?set SANDBOX_WORKSPACE_HOST_DIR in .env to the absolute host path of .data/workspaces}

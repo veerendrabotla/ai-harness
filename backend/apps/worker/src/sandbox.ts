@@ -1,9 +1,10 @@
 import type { PrismaClient } from "@prisma/client";
-import { execSync, spawn } from "node:child_process";
+import { execFile, execSync, spawn } from "node:child_process";
 import { statSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import fs from "node:fs/promises";
+import { promisify } from "node:util";
 import {
   BridgeGatewayClient,
   createLogger,
@@ -15,6 +16,9 @@ import { DeploymentEngine } from "@ai-harness/deployment-engine";
 import type { MCPRegistry } from "@ai-harness/mcp-platform";
 import { buildEnvironmentResolver as buildBaseResolver } from "./resolvers.js";
 import type { ExecutionEnvironmentResolver } from "@ai-harness/tool-harness";
+import { cloneUrlFor, containerPathFor, hostPathFor, workspaceKey } from "./workspace-paths.js";
+
+const execFileAsync = promisify(execFile);
 
 /**
  * Composite resolver:
@@ -22,6 +26,10 @@ import type { ExecutionEnvironmentResolver } from "@ai-harness/tool-harness";
  * - CLOUD_SANDBOX → ephemeral Docker container per call when SANDBOX_MODE=docker
  *   (project root mounted read-write at /workspace; network disabled by default
  *   except for http.request which runs on the host instead).
+ *   Non-absolute roots (e.g. github.com/owner/repo) are materialized into the
+ *   shared workspace dir; container/host path mapping is handled by
+ *   workspace-paths.ts because the worker container and the host Docker daemon
+ *   mount the shared dir at different absolute paths.
  */
 export function buildCompositeResolver(
   prisma: PrismaClient,
@@ -31,13 +39,59 @@ export function buildCompositeResolver(
   const base = buildBaseResolver(prisma, mcpRegistry);
   const env = getEnv();
   const sandboxEnabled = env["SANDBOX_MODE"] === "docker";
+  const wsContainerDir = env["SANDBOX_WORKSPACE_DIR"] || path.join(os.tmpdir(), "ai-harness-workspaces");
+  const wsHostDir = env["SANDBOX_WORKSPACE_HOST_DIR"] || wsContainerDir;
+  const materialized = new Map<string, Promise<string>>();
+
+  /**
+   * Resolve a caller-supplied root into a worker-visible absolute path:
+   * host paths under the shared workspace dir are translated into the
+   * container view; non-absolute roots (github.com/owner/repo) are
+   * materialized once into a stable per-ref workspace directory.
+   */
+  const materializeRoot = (rawRoot: string): Promise<string> => {
+    const mapped = containerPathFor(rawRoot, wsContainerDir, wsHostDir);
+    if (path.isAbsolute(mapped)) return Promise.resolve(mapped);
+    const key = workspaceKey(rawRoot);
+    let pending = materialized.get(key);
+    if (!pending) {
+      pending = materializeCloudRoot(rawRoot, path.join(wsContainerDir, key));
+      materialized.set(key, pending);
+    }
+    return pending;
+  };
+
+  async function materializeCloudRoot(rootReference: string, dir: string): Promise<string> {
+    await fs.mkdir(dir, { recursive: true });
+    if ((await fs.readdir(dir)).length > 0) return dir;
+    const url = cloneUrlFor(rootReference);
+    if (url) {
+      try {
+        await execFileAsync("git", ["clone", "--depth", "1", url, dir], { timeout: 60_000 });
+        return dir;
+      } catch (err) {
+        sandboxLog.warn({ err, rootReference }, "Cloud root clone failed; falling back to empty workspace");
+      }
+    }
+    try {
+      await execFileAsync("git", ["init"], { cwd: dir, timeout: 15_000 });
+    } catch (err) {
+      sandboxLog.warn({ err, rootReference }, "git init failed for materialized root");
+    }
+    return dir;
+  }
 
   const dockerRun = (root: string, argv: string[], timeoutMs: number, extraArgs: string[] = []): Promise<Record<string, unknown>> =>
     new Promise((resolveP, rejectP) => {
       const image = env["SANDBOX_IMAGE"] || "node:22-alpine";
       const args = [
         "run", "--rm",
-        "-v", `${root}:/workspace`,
+        "-v", `${hostPathFor(root, wsContainerDir, wsHostDir)}:/workspace`,
+        "-e", "npm_config_update_notifier=false",
+        // bind-mounted repos may carry foreign ownership; skip git's safe check
+        "-e", "GIT_CONFIG_COUNT=1",
+        "-e", "GIT_CONFIG_KEY_0=safe.directory",
+        "-e", "GIT_CONFIG_VALUE_0=/workspace",
         ...extraArgs,
         "-w", "/workspace",
         "--network", "none",
@@ -70,9 +124,12 @@ export function buildCompositeResolver(
       if (environment === "CLOUD_SANDBOX" && sandboxEnabled && definition.name !== "http.request") {
         // Sandbox tools operate relative to the mounted root; the caller passes root.
         return async (input: unknown) => {
-          const params = (input ?? {}) as Record<string, unknown>;
-          const root = typeof params["root"] === "string" ? params["root"] : "";
-          if (!root || !getSafeRoot(root)) throw errors.validation("sandbox tools require a valid registered root path");
+          const params = { ...((input ?? {}) as Record<string, unknown>) };
+          const rawRoot = typeof params["root"] === "string" ? params["root"] : "";
+          if (!rawRoot) throw errors.validation("sandbox tools require a valid registered root path");
+          const root = await materializeRoot(rawRoot);
+          if (!getSafeRoot(root)) throw errors.validation("sandbox tools require a valid registered root path");
+          params["root"] = root;
 
           switch (definition.name) {
             case "filesystem.list": {
@@ -87,19 +144,75 @@ export function buildCompositeResolver(
             case "filesystem.create": {
               const rel = sanitizeRel(String(params["path"] ?? ""));
               const content = String(params["content"] ?? "");
-              const tmpFile = path.join(os.tmpdir(), `aiharness-write-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+              // Temp file must live under the mounted root: the docker daemon
+              // cannot resolve arbitrary worker-container paths on the host.
+              const tmpDir = path.join(root, ".aiharness-tmp");
+              await fs.mkdir(tmpDir, { recursive: true });
+              const name = `write-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+              const tmpFile = path.join(tmpDir, name);
               await fs.writeFile(tmpFile, content, "utf8");
               try {
-                return await dockerRun(root, ["sh", "-c", `cp /host-tmp/${path.basename(tmpFile)} /workspace/${rel}`], definition.timeoutMs, [`-v`, `${tmpFile}:/host-tmp/${path.basename(tmpFile)}:ro`]);
+                return await dockerRun(root, ["sh", "-c", `cp /workspace/.aiharness-tmp/${name} /workspace/${rel}`], definition.timeoutMs);
               } finally {
                 await fs.unlink(tmpFile).catch((err) => {
                   sandboxLog.warn({ err }, "Failed to clean temp file");
                 });
+                await fs.rmdir(tmpDir).catch(() => undefined);
               }
             }
             case "terminal.run_readonly":
             case "terminal.run":
               return dockerRun(root, ["sh", "-c", String(params["command"] ?? "")], definition.timeoutMs);
+            case "filesystem.search": {
+              const query = String(params["query"] ?? "");
+              const glob = typeof params["glob"] === "string" && params["glob"] ? params["glob"] : "";
+              const include = glob ? `--include=${shq(glob)} ` : "";
+              return dockerRun(root, ["sh", "-c", `grep -rn -F ${include}-e ${shq(query)} /workspace`], definition.timeoutMs);
+            }
+            case "filesystem.rename":
+              return dockerRun(
+                root,
+                ["sh", "-c", `mv /workspace/${sanitizeRel(String(params["from"] ?? ""))} /workspace/${sanitizeRel(String(params["to"] ?? ""))}`],
+                definition.timeoutMs,
+              );
+            case "filesystem.delete":
+              return dockerRun(root, ["sh", "-c", `rm -rf /workspace/${sanitizeRel(String(params["path"] ?? ""))}`], definition.timeoutMs);
+            case "git.status":
+              return dockerRun(root, ["sh", "-c", "git status --porcelain=v1 -b"], definition.timeoutMs);
+            case "git.diff":
+              return dockerRun(root, ["sh", "-c", params["staged"] ? "git diff --staged" : "git diff"], definition.timeoutMs);
+            case "git.log": {
+              const count = Math.min(Math.max(Number(params["count"] ?? 10) || 10, 1), 100);
+              const author = typeof params["author"] === "string" && params["author"] ? ` --author=${shq(params["author"])}` : "";
+              return dockerRun(root, ["sh", "-c", `git log -n ${count}${author}`], definition.timeoutMs);
+            }
+            case "git.branch": {
+              const name = typeof params["name"] === "string" && params["name"] ? params["name"] : "";
+              const startPoint = typeof params["startPoint"] === "string" && params["startPoint"] ? params["startPoint"] : "";
+              const cmd = name ? `git branch ${shq(name)}${startPoint ? ` ${shq(startPoint)}` : ""}` : "git branch -a";
+              return dockerRun(root, ["sh", "-c", cmd], definition.timeoutMs);
+            }
+            case "git.commit": {
+              const message = String(params["message"] ?? "");
+              const files = Array.isArray(params["files"]) ? (params["files"] as unknown[]).map((f) => shq(String(f))) : [];
+              const add = files.length > 0 ? `git add ${files.join(" ")}` : "git add -A";
+              return dockerRun(
+                root,
+                ["sh", "-c", `${add} && git -c user.email=aiharness@local -c user.name=AI-Harness commit -m ${shq(message)}`],
+                definition.timeoutMs,
+              );
+            }
+            case "git.blame":
+              return dockerRun(root, ["sh", "-c", `git blame ${shq(sanitizeRel(String(params["path"] ?? "")))}`], definition.timeoutMs);
+            case "git.merge":
+              return dockerRun(root, ["sh", "-c", `git merge ${shq(String(params["branch"] ?? ""))}`], definition.timeoutMs);
+            case "git.stash": {
+              const action = String(params["action"] ?? "list");
+              const message = typeof params["message"] === "string" && params["message"] ? params["message"] : "";
+              const cmd =
+                action === "push" ? `git stash push${message ? ` -m ${shq(message)}` : ""}` : action === "pop" ? "git stash pop" : "git stash list";
+              return dockerRun(root, ["sh", "-c", cmd], definition.timeoutMs);
+            }
             default:
               throw errors.bridgeDisconnected(`tool ${definition.name} has no sandbox executor`);
           }
@@ -189,6 +302,11 @@ function sanitizeRel(rel: string): string {
   const cleaned = rel.replace(/\\/g, "/").replace(/(\.\.[\\/])|\.\.$/g, "").replace(/^\/+/, "");
   if (cleaned.includes("..")) throw Object.assign(new Error("traversal rejected"), { code: "POLICY_DENIED" });
   return cleaned;
+}
+
+/** Single-quote a value for sh -c interpolation. */
+function shq(s: string): string {
+  return `'${String(s).replace(/'/g, "'\\''")}'`;
 }
 
 /** STDIO MCP servers execute on the user's machine through their connected bridge. */

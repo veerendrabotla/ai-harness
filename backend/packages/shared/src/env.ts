@@ -66,6 +66,10 @@ const EnvSchema = z.object({
   // Cloud Sandbox — docker is the secure default; "" falls back to host temp dir (dev only)
   SANDBOX_MODE: z.enum(["docker", ""]).default("docker"),
   SANDBOX_IMAGE: z.string().default("node:22-alpine"),
+  // Shared workspace dir for materialized CLOUD roots: worker-visible path and
+  // the host path the Docker daemon mounts (they differ inside a container).
+  SANDBOX_WORKSPACE_DIR: z.string().default(""),
+  SANDBOX_WORKSPACE_HOST_DIR: z.string().default(""),
 
   // Observability
   SENTRY_DSN: z.string().optional(),

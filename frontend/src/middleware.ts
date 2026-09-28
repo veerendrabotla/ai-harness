@@ -1,6 +1,20 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_ROUTES = ["/", "/login", "/signup", "/forgot-password", "/reset-password", "/icons/icon-192.png", "/icons/icon-512.png"];
+const PUBLIC_ROUTES = [
+  "/",
+  "/login",
+  "/signup",
+  "/forgot-password",
+  "/reset-password",
+  "/icons/icon-192.png",
+  "/icons/icon-512.png",
+  // Build/runtime assets must stay reachable anonymously: sw.js is the
+  // service worker (redirects are disallowed for SW scripts) and env.js is a
+  // config file fetched at boot (a login redirect returns HTML and breaks
+  // JSON parsing). The matcher below already excludes other static paths.
+  "/sw.js",
+  "/env.js",
+];
 
 function isPublicRoute(pathname: string): boolean {
   return PUBLIC_ROUTES.includes(pathname);

@@ -66,6 +66,9 @@ RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund --fetch-ret
 FROM node:22-alpine
 WORKDIR /app
 ENV NODE_ENV=production
+# docker-cli + git: sandbox tool calls spawn `docker run` on the host daemon and
+# materialize non-absolute CLOUD roots via `git clone` (PHASE 13 #11).
+RUN apk add --no-cache docker-cli git
 COPY --from=deps /app/node_modules ./node_modules
 # npm nests some workspace deps (e.g. xstate under domain) — seed them too;
 # later COPY of the source tree merges over this without deleting them.

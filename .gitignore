@@ -40,5 +40,8 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 
+# materialized sandbox workspaces (docker.sock sandbox layer)
+.data/
+
 # generated prisma client
 backend/node_modules/.prisma/

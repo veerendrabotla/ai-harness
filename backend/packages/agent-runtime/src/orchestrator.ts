@@ -611,7 +611,10 @@ export class TaskOrchestrator {
       this.assertBudget(budget, deadline);
 
       let effective = step;
-      if (!effective.toolName) {
+      // Planning models sometimes emit free-form tool names (e.g. "Text Editor").
+      // Treat unknown names like an omitted toolName — let the implementation
+      // model PROPOSE the real tool — instead of failing the whole run.
+      if (!effective.toolName || !this.tools.get(effective.toolName)) {
         // Reasoning step: give the implementation model a chance to PROPOSE a
         // tool action; proposals pass through the exact same permission gate.
         const proposal = await this.proposeNextAction(input, runId, ctx, budget, step, traceId);
@@ -1617,12 +1620,17 @@ export class TaskOrchestrator {
   }
 
   private async handleStageFailure(input: RunInput, runId: string, state: TaskState, err: unknown): Promise<RunOutcome> {
+    // AppError.name is always "AppError" — match on its .code so structured
+    // failures (PROVIDER_UNAVAILABLE, POLICY_DENIED, ...) keep their identity
+    // instead of collapsing into INTERNAL_ERROR.
     const failureCode =
-      err instanceof Error && err.name && FAILURE_CODE_NAMES.has(err.name)
-        ? err.name
-        : err instanceof AdapterError
-          ? FAILURE_CODES.PROVIDER_ERROR
-          : FAILURE_CODES.INTERNAL_ERROR;
+      err instanceof AppError && FAILURE_CODE_NAMES.has(err.code)
+        ? err.code
+        : err instanceof Error && err.name && FAILURE_CODE_NAMES.has(err.name)
+          ? err.name
+          : err instanceof AdapterError
+            ? FAILURE_CODES.PROVIDER_ERROR
+            : FAILURE_CODES.INTERNAL_ERROR;
     this.logger.error({ err, taskId: input.taskId, runId }, "run failed");
     await this.fireHooks("onError", { taskId: input.taskId, runId, projectId: input.projectId, workspaceId: input.workspaceId, payload: { failureCode, message: String(err instanceof Error ? err.message : err) } }).catch(() => undefined);
     try {

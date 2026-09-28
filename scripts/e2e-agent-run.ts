@@ -2,11 +2,18 @@
  * Full vertical-slice E2E against a RUNNING api + worker + a real model provider.
  * Drives: signup -> workspace -> project -> provider -> route -> task ->
  * QUEUED..PLANNING -> WAITING_FOR_APPROVAL -> approve -> EXECUTING..terminal.
+ * Requires the docker sandbox layer so CLOUD tools can execute:
+ *   docker compose -f docker-compose.yml -f docker-compose.sandbox.yml up -d
+ * The project root is seeded under .data/workspaces on the host so the
+ * worker-side sandbox container can mount it (PHASE 13 #11).
  * Usage: npx tsx scripts/e2e-agent-run.ts [baseUrl] [model]
  */
+import { execSync } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
 const BASE = process.argv[2] ?? "http://localhost:4000";
 const MODEL = process.argv[3] ?? "qwen2.5:3b";
-const PROVIDER_BASE = process.env.E2E_PROVIDER_BASE ?? "http://localhost:11434/v1";
+const PROVIDER_BASE = process.env.E2E_PROVIDER_BASE ?? "http://host.docker.internal:11434/v1";
 
 async function call(method: string, path: string, opts: { token?: string; json?: unknown } = {}) {
   const res = await fetch(`${BASE}${path}`, {
@@ -44,6 +51,37 @@ async function waitFor(
   throw new Error(`Timed out waiting for ${name}; last=${JSON.stringify(lastDetail).slice(0, 300)}`);
 }
 
+function seedProjectWorkspace(): string {
+  const dir = path.resolve(process.cwd(), ".data", "workspaces", `e2e-agent-${Date.now()}`);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(
+    path.join(dir, "package.json"),
+    JSON.stringify(
+      {
+        name: "e2e-demo",
+        version: "0.0.1",
+        private: true,
+        scripts: { test: "node -e \"console.log('ok: no tests yet')" },
+      },
+      null,
+      2,
+    ) + "\n",
+  );
+  fs.writeFileSync(
+    path.join(dir, "README.md"),
+    "# e2e-demo\n\nSeed project for the AI Harness agent E2E. Run `npm test` to verify.\n",
+  );
+  try {
+    execSync("git init -q && git add -A && git -c user.email=e2e@local -c user.name=e2e commit -qm init", {
+      cwd: dir,
+      stdio: "ignore",
+    });
+  } catch {
+    // git metadata is best-effort; the seed files are what matter for sandbox E2E
+  }
+  return dir;
+}
+
 async function main() {
   // 1. Auth
   const email = `e2e-${Date.now()}@example.com`;
@@ -54,7 +92,9 @@ async function main() {
   const token: string = signup.body.data.accessToken;
   log("signed up", { email });
 
-  // 2. Workspace + project
+  // 2. Workspace + project — seed a tiny real repo the sandbox can mount and
+  // "verify" (npm test passes inside the ephemeral container, --network none).
+  const wsDir = seedProjectWorkspace();
   const ws = await call("POST", "/v1/workspaces", {
     token,
     json: { name: "E2E Workspace", executionMode: "CLOUD" },
@@ -62,10 +102,10 @@ async function main() {
   const workspaceId: string = ws.body.data.id;
   const project = await call("POST", `/v1/workspaces/${workspaceId}/projects`, {
     token,
-    json: { name: "demo-repo", connectionType: "CLOUD", rootReference: "github.com/e2e/demo" },
+    json: { name: "demo-repo", connectionType: "CLOUD", rootReference: wsDir },
   });
   const projectId: string = project.body.data.id;
-  log("workspace+project ready", { workspaceId });
+  log("workspace+project ready", { workspaceId, rootReference: wsDir });
 
   // 3. Provider connection (OpenAI-compatible local endpoint) + health test
   const provider = await call("POST", "/v1/providers", {

@@ -128,7 +128,8 @@ async function main(): Promise<void> {
 
   try {
     await waitForHealth(PRIMARY, 10_000);
-    await waitForHealth(REPLICA_BASE, 60_000);
+    // tsx cold-compile of the API can exceed 60s on a loaded machine
+    await waitForHealth(REPLICA_BASE, 180_000);
     log("both replicas healthy");
 
     const email = `replica-${Date.now()}@example.com`;

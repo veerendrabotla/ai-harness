@@ -115,6 +115,12 @@ export class Planner {
       '"toolName"?: string, "toolInput"?: object}], "risks": string[],',
       '"verificationPlan": [{"command": string}]}.',
       "Steps must be ordered and independently verifiable.",
+      "verificationPlan commands run inside the project root with the working directory",
+      "already set: return directly runnable commands only (e.g. `npm test`, `git diff --stat`).",
+      "Never include cd, <placeholders>, or angle-bracket tokens in verification commands.",
+      "toolName must be an exact registered tool (filesystem.read/write/list/rename/delete,",
+      "git.status/diff/log/commit/branch/blame/merge/stash, terminal.run, terminal.run_readonly)",
+      "or omitted entirely — never invent tool names.",
     ].join("\n");
 
     const request: ModelRequest = {

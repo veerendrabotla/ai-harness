@@ -42,8 +42,8 @@ test.describe("responsive layout", () => {
     await page.waitForLoadState("networkidle");
 
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-    await expect(page.getByRole("link", { name: /create account/i })).toBeVisible();
-    await expect(page.getByRole("link", { name: /sign in/i })).toBeVisible();
+    await expect(page.getByRole("link", { name: /start building free/i })).toBeVisible();
+    await expect(page.getByRole("link", { name: /sign in/i }).first()).toBeVisible();
   });
 
   test("no critical controls clipped offscreen", async ({ page }) => {

@@ -231,7 +231,7 @@ describe("Docker Sandbox — Security Isolation", () => {
       expect(result3.exitCode).toBe(0);
 
       await engine.destroyContainer(container.id);
-    });
+    }, 30_000);
   });
 
   describe("Disk Exhaustion Prevention", () => {

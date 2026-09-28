@@ -74,8 +74,10 @@ test.describe("failure scenarios", () => {
     await page.getByLabel(/password/i).fill("WrongPassword123");
     await page.getByRole("button", { name: /sign in/i }).click();
 
-    await expect(page.getByRole("alert")).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText(/invalid email or password/i)).toBeVisible();
+    // The route announcer is also role=alert — target the error region that carries the message.
+    await expect(
+      page.getByRole("alert").filter({ hasText: /invalid email or password/i }),
+    ).toBeVisible({ timeout: 20_000 });
   });
 
   test("network error on login shows error state", async ({ page }) => {

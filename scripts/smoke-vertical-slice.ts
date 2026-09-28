@@ -38,7 +38,7 @@ async function call(method: string, path: string, opts: {
 async function main() {
   // Health
   const health = await call("GET", "/healthz");
-  check("healthz ok", health.status === 200 && health.body.status === "ok", health);
+  check("healthz ok", health.status === 200 && health.body?.data?.status === "ok", health);
 
   // Signup (unique email)
   const email = `smoke-${Date.now()}@example.com`;
@@ -79,15 +79,36 @@ async function main() {
   check("create project", project.status === 201, project);
   const projectId: string = project.body?.data?.id;
 
-  // Task without configured route -> structured PROVIDER_UNAVAILABLE
+  // Task without configured route -> accepted at create, then the worker fails
+  // the run at routing time with structured PROVIDER_UNAVAILABLE (docs
+  // concepts.md §model resolution: routing resolves at execution, not create).
   const taskNoRoute = await call("POST", "/v1/tasks", {
     token: accessToken,
     json: { workspaceId, projectId, goal: "Write a tiny module for testing", selectedModelMode: "ROUTED" },
   });
+  const noRouteTaskId: string | undefined = taskNoRoute.body?.data?.id;
   check(
-    "task creation without routes -> PROVIDER_UNAVAILABLE",
-    taskNoRoute.status === 503 && taskNoRoute.body?.error?.code === "PROVIDER_UNAVAILABLE",
+    "task creation without routes -> accepted (201)",
+    taskNoRoute.status === 201 && Boolean(noRouteTaskId),
     taskNoRoute,
+  );
+
+  let noRouteState = "";
+  let noRouteRuns: any[] = [];
+  const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline && noRouteState !== "FAILED") {
+    await new Promise((r) => setTimeout(r, 1_000));
+    const detail = await call("GET", `/v1/tasks/${noRouteTaskId}`, { token: accessToken });
+    noRouteState = detail.body?.data?.state ?? "";
+    if (noRouteState === "FAILED") {
+      const runs = await call("GET", `/v1/tasks/${noRouteTaskId}/runs`, { token: accessToken });
+      noRouteRuns = runs.body?.data ?? [];
+    }
+  }
+  check(
+    "task without routes fails run -> PROVIDER_UNAVAILABLE",
+    noRouteState === "FAILED" && noRouteRuns.some((r) => r.failureCode === "PROVIDER_UNAVAILABLE"),
+    { state: noRouteState, runs: noRouteRuns.map((r) => ({ state: r.state, failureCode: r.failureCode, failureMessage: r.failureMessage })) },
   );
 
   // MANUAL mode without override -> VALIDATION_ERROR

@@ -3,9 +3,9 @@ import { expect, test } from "@playwright/test";
 test.describe("public shell", () => {
   test("landing page renders value proposition and CTAs", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByRole("heading", { level: 1 })).toContainText("One harness");
-    await expect(page.getByRole("link", { name: /create account/i })).toBeVisible();
-    await expect(page.getByRole("link", { name: /^sign in$/i })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("Build faster with");
+    await expect(page.getByRole("link", { name: /start building free/i })).toBeVisible();
+    await expect(page.getByRole("link", { name: /^sign in$/i }).first()).toBeVisible();
   });
 
   test("login page exposes form with accessible labels", async ({ page }) => {
