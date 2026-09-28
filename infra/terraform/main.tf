@@ -19,9 +19,9 @@ resource "google_artifact_registry_repository" "images" {
 
 # ── Cloud SQL (PostgreSQL 17) ──────────────────────────────────
 resource "google_sql_database_instance" "pg" {
-  name             = "ai-harness-pg"
-  database_version = "POSTGRES_17"
-  region           = var.region
+  name                = "ai-harness-pg"
+  database_version    = "POSTGRES_17"
+  region              = var.region
   deletion_protection = true
 
   settings {
@@ -32,7 +32,10 @@ resource "google_sql_database_instance" "pg" {
   }
 }
 
-resource "google_sql_database" "app" { name = "ai_harness"; instance = google_sql_database_instance.pg.name }
+resource "google_sql_database" "app" {
+  name     = "ai_harness"
+  instance = google_sql_database_instance.pg.name
+}
 resource "google_sql_user" "app" {
   name     = "ai_harness"
   instance = google_sql_database_instance.pg.name

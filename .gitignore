@@ -45,3 +45,11 @@ Thumbs.db
 
 # generated prisma client
 backend/node_modules/.prisma/
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.tfstate.lock.info
+*.tfvars
+*.tfvars.json

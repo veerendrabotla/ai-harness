@@ -1,17 +1,50 @@
-variable "project_id" { type = string }
-variable "region" { type = string; default = "us-central1" }
-variable "db_tier" { type = string; default = "db-g1-small" }
-variable "db_password" { type = string; sensitive = true }
+variable "project_id" {
+  type = string
+}
+variable "region" {
+  type    = string
+  default = "us-central1"
+}
+variable "db_tier" {
+  type    = string
+  default = "db-g1-small"
+}
+variable "db_password" {
+  type      = string
+  sensitive = true
+}
 
-variable "jwt_access_secret" { type = string; sensitive = true }
-variable "csrf_secret" { type = string; sensitive = true }
-variable "encryption_key" { type = string; sensitive = true }
-variable "bridge_internal_token" { type = string; sensitive = true }
-variable "frontend_origin" { type = string; default = "https://app.example.com" }
-variable "api_base_url" { type = string; default = "https://api.example.com" }
+variable "jwt_access_secret" {
+  type      = string
+  sensitive = true
+}
+variable "csrf_secret" {
+  type      = string
+  sensitive = true
+}
+variable "encryption_key" {
+  type      = string
+  sensitive = true
+}
+variable "bridge_internal_token" {
+  type      = string
+  sensitive = true
+}
+variable "frontend_origin" {
+  type    = string
+  default = "https://app.example.com"
+}
+variable "api_base_url" {
+  type    = string
+  default = "https://api.example.com"
+}
+variable "image_tag" {
+  type    = string
+  default = "latest"
+}
 
 locals {
-  db_host = google_sql_database_instance.pg.private_ip_address
+  db_host    = google_sql_database_instance.pg.private_ip_address
   redis_host = google_redis_instance.cache.host
   common_env = [
     { name = "NODE_ENV", value = "production" },
@@ -25,4 +58,3 @@ locals {
   ]
   image_base = "${var.region}-docker.pkg.dev/${var.project_id}/ai-harness"
 }
-variable "image_tag" { type = string; default = "latest" }

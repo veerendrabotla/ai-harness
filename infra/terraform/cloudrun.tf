@@ -5,10 +5,16 @@ resource "google_cloud_run_v2_service" "api" {
   template {
     containers {
       image = "${local.image_base}/api:${var.image_tag}"
-      env   = concat(local.common_env, [
-        { name = "FRONTEND_ORIGIN", value = var.frontend_origin },
-        { name = "API_BASE_URL", value = var.api_base_url },
-      ])
+      dynamic "env" {
+        for_each = concat(local.common_env, [
+          { name = "FRONTEND_ORIGIN", value = var.frontend_origin },
+          { name = "API_BASE_URL", value = var.api_base_url },
+        ])
+        content {
+          name  = env.value.name
+          value = env.value.value
+        }
+      }
       resources { limits = { cpu = "1", memory = "512Mi" } }
     }
     service_account = google_service_account.runtime.email
@@ -22,7 +28,13 @@ resource "google_cloud_run_v2_service" "worker" {
   template {
     containers {
       image = "${local.image_base}/worker:${var.image_tag}"
-      env   = local.common_env
+      dynamic "env" {
+        for_each = local.common_env
+        content {
+          name  = env.value.name
+          value = env.value.value
+        }
+      }
       resources { limits = { cpu = "1", memory = "512Mi" } }
     }
     service_account = google_service_account.runtime.email
@@ -35,7 +47,13 @@ resource "google_cloud_run_v2_service" "gateway" {
   template {
     containers {
       image = "${local.image_base}/gateway:${var.image_tag}"
-      env   = local.common_env
+      dynamic "env" {
+        for_each = local.common_env
+        content {
+          name  = env.value.name
+          value = env.value.value
+        }
+      }
       resources { limits = { cpu = "1", memory = "256Mi" } }
     }
   }

@@ -1,8 +1,12 @@
 // Regenerates the workspace-manifest COPY block in the backend Dockerfiles.
 // Line-based: drops any existing manifest COPY lines, inserts the full block
 // right before the npm ci step. Safe to re-run.
+// Usage: node scripts/gen-docker-manifests.mjs [--check]
+//   --check: verify Dockerfiles match the generated block (CI drift gate), no writes.
 import { readdirSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+
+const checkOnly = process.argv.includes("--check");
 
 const pkgs = [];
 for (const group of ["backend/apps", "backend/packages"]) {
@@ -24,9 +28,12 @@ const isManifestCopy = (line) =>
   !line.startsWith("COPY package.json") &&
   line.trimEnd().endsWith("/");
 
+const isHeader = (line) => header.includes(line);
+
 for (const df of ["Dockerfile.api", "Dockerfile.worker", "Dockerfile.gateway"]) {
-  const lines = readFileSync(df, "utf8").split(/\r?\n/);
-  const kept = lines.filter((line) => !isManifestCopy(line));
+  const original = readFileSync(df, "utf8");
+  const lines = original.split(/\r?\n/);
+  const kept = lines.filter((line) => !isManifestCopy(line) && !isHeader(line));
   const ciIdx = kept.findIndex((line) => line.includes("npm ci --no-audit"));
   if (ciIdx === -1) {
     console.log(`NO npm ci step: ${df}`);
@@ -34,6 +41,16 @@ for (const df of ["Dockerfile.api", "Dockerfile.worker", "Dockerfile.gateway"]) 
   }
   const block = pkgs.map((file) => `COPY ${file} ${file.slice(0, file.lastIndexOf("/"))}/`);
   kept.splice(ciIdx, 0, ...header, ...block);
-  writeFileSync(df, kept.join("\n"));
-  console.log(`${df} -> ${pkgs.length} manifests`);
+  const next = kept.join("\n");
+  if (checkOnly) {
+    if (next !== original) {
+      console.error(`MANIFEST DRIFT: ${df} is out of sync — run: node scripts/gen-docker-manifests.mjs`);
+      process.exitCode = 1;
+    } else {
+      console.log(`${df} OK (${pkgs.length} manifests)`);
+    }
+  } else {
+    writeFileSync(df, next);
+    console.log(`${df} -> ${pkgs.length} manifests`);
+  }
 }

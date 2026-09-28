@@ -293,7 +293,7 @@ Verification evidence:
 External-only (not in the 20): GCP/terraform apply, Resend key, Sentry/PostHog - EXTERNAL_DEPLOYMENT_CHECKLIST.md.
 
 ### Execution log
-- [x] 1 git  - [x] 2 audit  - [x] 3 e2e battery  - [ ] 4 CI docker  - [ ] 5 terraform
+- [x] 1 git  - [x] 2 audit  - [x] 3 e2e battery  - [x] 4 CI docker  - [x] 5 terraform
 - [ ] 6 bounds  - [ ] 7 sweeper  - [ ] 8 reviewer  - [ ] 9 adapters  - [ ] 10 email  - [x] 11 sandbox
 - [ ] 12 bridge-proxy  - [ ] 13 load  - [ ] 14 hygiene
 - [ ] 15 prompt  - [ ] 16 pricing+bench  - [ ] 17 rules+cases  - [ ] 18 enterprise  - [ ] 19 guides  - [ ] 20 release
@@ -305,7 +305,18 @@ External-only (not in the 20): GCP/terraform apply, Resend key, Sentry/PostHog -
   - **Accepted residuals (documented, non-exploitable in our usage)**: `postcss@8.4.31` nested exact-pin inside `next` (build-time processing of trusted project CSS only; clears via `next@16` upgrade — tracked); `uuid@9` in `@google/genai` chain (CVE needs attacker-controlled v3/v5/v6 buffer; gaxios calls `v4()` no-arg; uuid 11 is ESM-only -> would break CJS `require`). Dev-only residue: electron/electron-builder chain (ASAR integrity, node-tar critical via cacache/node-gyp), vitest mocker — dev tooling, not shipped.
   - Fallout fixed: `next build` regenerated `next-env.d.ts` with a `path` triple-slash -> `frontend/eslint.config.mjs` now ignores `next-env.d.ts` (generated file).
   - Verification: `npm run build` (all workspaces incl. **desktop electron NSIS+portable — asar lock gone**) EXIT 0; lint 0; typecheck 0; FE tsc 0; FE lint 0 err (2 known warn); `RUN_INTEGRATION=1 npm test` **525/525** (first rerun had 4 live-server files hook-timeout — transient fresh-install I/O storm; isolated rerun green, full rerun green 53/53 + 525/525).
-- [ ] 3 e2e battery  - [ ] 4 CI docker  - [ ] 5 terraform  - [ ] 6-20 pending
+
+### PHASE 13 execution log (tasks 4 + 5) — CI docker boot + terraform fmt/validate
+
+- [x] 4 CI docker — `ci.yml` gains the **`docker`** job: `gen-docker-manifests.mjs --check` → `setup-env.mjs` → `docker compose build` → `up -d` → health poll (API `/healthz` must include `"status":"ok"` + `"database":"up"`, frontend `:3000` must return 200, 60×5s budget, logs dumped on timeout) → migrate container `ExitCode == 0` → `down -v` teardown (`if: always()`).
+  - `scripts/gen-docker-manifests.mjs` gained **`--check`**: compares generated content in-memory, exits 1 on drift with a re-run hint (verified: clean → 0, corrupted COPY line → 1, restore → 0).
+  - **Fixed generator non-idempotency**: it stripped old manifest COPY lines but never the old 3-line header comment, so every run appended a duplicate header (+3 lines/run). Header lines are now filtered too; back-to-back runs are byte-identical (all 3 Dockerfiles back to 56 manifests, 0 diff vs commit).
+  - Locally verified: migrate-exit step logic (`docker compose ps -aq migrate` → inspect `{{.State.ExitCode}}` = 0 on the live stack) and YAML parses with jobs `lint, typecheck, test, build, security, docker, terraform`.
+- [x] 5 terraform — installed **1.11.4** locally (`required_version >= 1.11.4`; 1.9.8 was correctly rejected) and `fmt`/`init -backend=false`/`validate` all green. Fixed the PHASE 12 blind-edit damage:
+  - **12 invalid single-line multi-arg blocks** (`{ a = x; b = y }` — `;` is not valid HCL) across `variables.tf` (region/db_tier/db_password/4 secrets/2 URLs/image_tag), `main.tf` (google_sql_database.app), `outputs.tf` (redis_host/db_private_ip) — all expanded to multi-line.
+  - **`env = concat(...)` on Cloud Run containers is not an argument** ("did you mean a block of type env") — converted all 3 services (api/worker/gateway) to `dynamic "env"` + `for_each`/`content`.
+  - `terraform fmt -recursive` applied (`fmt -check` clean); `ci.yml` gains the **`terraform`** job (hashicorp/setup-terraform pinned `1.11.4` → `fmt -check -recursive` → `init -backend=false -input=false` → `validate`).
+  - `.gitignore` terraform section added (`.terraform/`, `*.tfstate*`, lock-info, `*.tfvars*`); **`.terraform.lock.hcl` is tracked** (provider pins — best practice).
 
 ### PHASE 13 execution log (tasks 3 + 11) — full E2E battery green + docker.sock sandbox
 

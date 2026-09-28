@@ -111,3 +111,76 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - name: Audit production dependencies
         run: npm audit --omit=dev || true
+
+  docker:
+    name: Docker compose boot health
+    runs-on: ubuntu-latest
+    needs: [lint, typecheck]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Docker manifests in sync
+        run: node scripts/gen-docker-manifests.mjs --check
+      - name: Create .env
+        run: node scripts/setup-env.mjs
+      - name: Build images
+        run: docker compose build
+      - name: Boot stack
+        run: docker compose up -d
+      - name: Wait for API + frontend health
+        run: |
+          set -euo pipefail
+          api_ok=""
+          web_ok=""
+          for i in $(seq 1 60); do
+            if [ -z "$api_ok" ]; then
+              body="$(curl -fsS http://localhost:4000/healthz || true)"
+              case "$body" in
+                *'"status":"ok"'*'"database":"up"'*) api_ok=1 ;;
+              esac
+            fi
+            if [ -z "$web_ok" ]; then
+              code="$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000 || true)"
+              if [ "$code" = "200" ]; then web_ok=1; fi
+            fi
+            if [ -n "$api_ok" ] && [ -n "$web_ok" ]; then
+              echo "stack healthy after ${i} poll(s)"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "TIMEOUT waiting for stack health"
+          docker compose ps
+          docker compose logs --tail 100 api frontend migrate
+          exit 1
+      - name: Migrate exited 0
+        run: |
+          set -euo pipefail
+          cid="$(docker compose ps -aq migrate)"
+          code="$(docker inspect --format '{{.State.ExitCode}}' "$cid")"
+          echo "migrate exit=$code"
+          [ "$code" = "0" ]
+      - name: Teardown
+        if: always()
+        run: docker compose down -v
+
+  terraform:
+    name: Terraform fmt/validate
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra/terraform
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.11.4"
+      - name: terraform fmt
+        run: terraform fmt -check -recursive
+      - name: terraform init (no backend)
+        run: terraform init -backend=false -input=false
+      - name: terraform validate
+        run: terraform validate
