@@ -1,0 +1,61 @@
+config:
+  target: "http://localhost:4000"
+  phases:
+    - duration: 60
+      arrivalRate: 10
+      name: "Warm up"
+    - duration: 120
+      arrivalRate: 50
+      name: "Load test"
+    - duration: 60
+      arrivalRate: 100
+      name: "Spike test"
+  defaults:
+    headers:
+      Content-Type: "application/json"
+  ensure:
+    p99: 500
+    maxErrorRate: 10
+
+scenarios:
+  - name: "Health check endpoint"
+    flow:
+      - get:
+          url: "/healthz"
+          expect:
+            - statusCode: 200
+
+  - name: "API health check"
+    flow:
+      - get:
+          url: "/api/healthz"
+          expect:
+            - statusCode: 200
+
+  - name: "Auth flow - signup and login"
+    flow:
+      - post:
+          url: "/v1/auth/signup"
+          json:
+            email: "loadtest-{{ $randomNumber() }}@example.com"
+            password: "TestPassword123!"
+            displayName: "Load Test User"
+          expect:
+            - statusCode: 201
+          capture:
+            - json: "$.data.accessToken"
+              as: "token"
+      - post:
+          url: "/v1/auth/login"
+          json:
+            email: "loadtest-{{ $randomNumber() }}@example.com"
+            password: "TestPassword123!"
+          expect:
+            - statusCode: 200
+
+  - name: "Protected endpoints require auth"
+    flow:
+      - get:
+          url: "/v1/tasks"
+          expect:
+            - statusCode: 401

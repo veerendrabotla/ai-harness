@@ -1,0 +1,25 @@
+{
+  "name": "ai-harness-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI Harness — Desktop application",
+  "main": "dist/main.js",
+  "author": "",
+  "license": "UNLICENSED",
+  "scripts": {
+    "dev": "tsc && electron .",
+    "build": "tsc && electron-builder",
+    "build:win": "tsc && electron-builder --win",
+    "build:mac": "tsc && electron-builder --mac",
+    "build:linux": "tsc && electron-builder --linux",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.9"
+  },
+  "devDependencies": {
+    "electron": "33.4.11",
+    "electron-builder": "^25.1.8",
+    "typescript": "^5.8.3"
+  }
+}

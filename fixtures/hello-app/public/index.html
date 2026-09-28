@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hello Fixture App</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; background: #1a1a2e; color: #e0e0e0; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+    .container { text-align: center; padding: 2rem; max-width: 600px; }
+    h1 { font-size: 2rem; margin-bottom: 1rem; color: #00d4ff; }
+    .status { display: inline-block; padding: 0.25rem 0.75rem; border-radius: 9999px; background: #16a34a; color: white; font-size: 0.875rem; margin-bottom: 1.5rem; }
+    .card { background: #16213e; border-radius: 0.75rem; padding: 1.5rem; margin-top: 1rem; border: 1px solid #1a1a4e; }
+    .card h2 { font-size: 1rem; color: #94a3b8; margin-bottom: 0.5rem; }
+    .card p { color: #e2e8f0; }
+    #greeting { font-style: italic; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1 data-testid="app-title">Hello Fixture App</h1>
+    <div class="status" data-testid="status-badge">Running</div>
+    <div class="card">
+      <h2>Server Status</h2>
+      <p data-testid="health-status">Loading...</p>
+    </div>
+    <div class="card">
+      <h2>Greeting</h2>
+      <p data-testid="greeting-text" id="greeting">Loading...</p>
+    </div>
+  </div>
+  <script>
+    fetch("/api/health").then(r => r.json()).then(d => {
+      document.querySelector("[data-testid='health-status']").textContent = "Status: " + d.status;
+    }).catch(() => {
+      document.querySelector("[data-testid='health-status']").textContent = "Status: error";
+    });
+    fetch("/api/greeting").then(r => r.json()).then(d => {
+      document.querySelector("[data-testid='greeting-text']").textContent = d.message;
+    }).catch(() => {
+      document.querySelector("[data-testid='greeting-text']").textContent = "Failed to load";
+    });
+  </script>
+</body>
+</html>

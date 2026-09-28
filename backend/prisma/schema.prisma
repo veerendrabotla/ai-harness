@@ -1,0 +1,1493 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider          = "postgresql"
+  url               = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+}
+
+model User {
+  id                      String                        @id @default(uuid()) @db.Uuid
+  email                   String                        @unique @db.VarChar(320)
+  passwordHash            String                        @map("password_hash")
+  displayName             String                        @map("display_name") @db.VarChar(100)
+  avatarUrl               String?                       @map("avatar_url")
+  status                  UserStatus                    @default(ACTIVE)
+  platformRole            PlatformRole                  @default(USER) @map("platform_role")
+  twoFactorEnabled        Boolean                       @default(false) @map("two_factor_enabled")
+  twoFactorSecret         String?                       @map("two_factor_secret")
+  notificationPreferences Json?                         @default("{\"email\":true}") @map("notification_preferences")
+  createdAt               DateTime                      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt               DateTime                      @updatedAt @map("updated_at") @db.Timestamptz(6)
+  approvalDecisions       ApprovalRequest[]             @relation("ApprovalDecider")
+  auditLogs               AuditLog[]
+  auditLogEntries         AuditLogEntry[]
+  bridges                 Bridge[]
+  checkpoints             Checkpoint[]                  @relation("CheckpointCreator")
+  mcpServers              McpServer[]
+  organizationMemberships OrganizationMember[]
+  ownedOrganizations      Organization[]                @relation("OrganizationOwner")
+  passwordResetTokens     PasswordResetToken[]
+  providerConnections     ProviderConnection[]
+  refreshSessions         RefreshSession[]
+  sessionExports          SessionExport[]
+  sessionShares           SessionShare[]
+  createdDeployments      Deployment[]
+  approvedPlans           TaskPlan[]                    @relation("PlanApprover")
+  createdTasks            Task[]                        @relation("TaskCreator")
+  instructionVersions     WorkspaceInstructionVersion[] @relation("InstructionAuthor")
+  sentInvites             WorkspaceInvite[]
+  workspaceMemberships    WorkspaceMember[]
+  ownedWorkspaces         Workspace[]                   @relation("WorkspaceOwner")
+  deploymentComments      DeploymentComment[]
+  projectPermissions      ProjectTeamPermission[]
+  notifications           Notification[]
+  fileVersions            FileVersion[]                 @relation("FileVersionUploader")
+
+  @@index([status])
+  @@map("users")
+}
+
+model RefreshSession {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(6)
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("refresh_sessions")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(6)
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("password_reset_tokens")
+}
+
+model Workspace {
+  id                   String                        @id @default(uuid()) @db.Uuid
+  ownerId              String                        @map("owner_id") @db.Uuid
+  organizationId       String?                       @map("organization_id") @db.Uuid
+  name                 String                        @db.VarChar(120)
+  description          String?
+  executionMode        ExecutionMode                 @default(CLOUD) @map("execution_mode")
+  status               WorkspaceStatus               @default(ACTIVE)
+  ipAllowlist          String[]                      @map("ip_allowlist")
+  ipAllowlistEnabled   Boolean                       @default(false) @map("ip_allowlist_enabled")
+  webhookUrls          String[]                      @map("webhook_urls")
+  apiKeys              ApiKey[]
+  featureFlags         FeatureFlag[]
+  taskTemplates        TaskTemplate[]
+  costAlerts           CostAlert[]
+  ssoConfigs           SsoConfig[]
+  rateLimits           RateLimit[]
+  createdAt            DateTime                      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime                      @updatedAt @map("updated_at") @db.Timestamptz(6)
+  auditLogs            AuditLog[]
+  auditLogEntries      AuditLogEntry[]
+  modelRoutes          ModelRoute[]
+  projects             Project[]
+  sessions             Session[]
+  tasks                Task[]
+  instructionVersions  WorkspaceInstructionVersion[]
+  invites              WorkspaceInvite[]
+  mcpLinks             WorkspaceMcpServer[]
+  members              WorkspaceMember[]
+  policy               WorkspacePolicy?
+  providerLinks        WorkspaceProviderConnection[]
+  webhookSubscriptions WebhookSubscription[]
+  emailDeliveries      EmailDelivery[]
+  subscription         Subscription?
+   backups              WorkspaceBackup[]
+   auditRetention       AuditRetentionSetting?
+   knowledgeEntries     KnowledgeEntry[]
+   webcontainerSessions WebContainerSession[]
+   webcontainerSetting  WebContainerSetting?
+   organization         Organization?                 @relation(fields: [organizationId], references: [id])
+  owner                User                          @relation("WorkspaceOwner", fields: [ownerId], references: [id])
+
+  @@index([ownerId])
+  @@index([organizationId])
+  @@index([status])
+  @@map("workspaces")
+}
+
+model WorkspaceMember {
+  id          String        @id @default(uuid()) @db.Uuid
+  workspaceId String        @map("workspace_id") @db.Uuid
+  userId      String        @map("user_id") @db.Uuid
+  role        WorkspaceRole @default(MEMBER)
+  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([userId])
+  @@map("workspace_members")
+}
+
+model Project {
+  id                   String                  @id @default(uuid()) @db.Uuid
+  workspaceId          String                  @map("workspace_id") @db.Uuid
+  bridgeId             String?                 @map("bridge_id") @db.Uuid
+  name                 String                  @db.VarChar(160)
+  connectionType       ProjectConnectionType   @default(CLOUD) @map("connection_type")
+  repositoryUrl        String?                 @map("repository_url")
+  rootReference        String                  @map("root_reference")
+  defaultBranch        String?                 @map("default_branch") @db.VarChar(255)
+  status               ProjectStatus           @default(AVAILABLE)
+  deploymentProtection Json?                   @map("deployment_protection")
+  webhookSecret        String?                 @map("webhook_secret") @db.VarChar(255)
+  createdAt            DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
+  checkpoints          Checkpoint[]
+  deployments          Deployment[]
+  sessions             Session[]
+  bridge               Bridge?                 @relation(fields: [bridgeId], references: [id])
+  workspace            Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  tasks                Task[]
+  memories             ProjectMemory[]
+  secrets              DeploymentSecret[]
+  envVars              DeploymentEnvVar[]
+  teamPermissions      ProjectTeamPermission[]
+  fileVersions         FileVersion[]
+
+  @@index([workspaceId])
+  @@index([status])
+  @@map("projects")
+}
+
+model WorkspaceInstructionVersion {
+  id          String    @id @default(uuid()) @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  version     Int
+  content     String
+  createdBy   String    @map("created_by") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  author      User      @relation("InstructionAuthor", fields: [createdBy], references: [id])
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, version])
+  @@map("workspace_instruction_versions")
+}
+
+model WorkspacePolicy {
+  id                     String           @id @default(uuid()) @db.Uuid
+  workspaceId            String           @unique @map("workspace_id") @db.Uuid
+  requirePlanApproval    Boolean          @default(true) @map("require_plan_approval")
+  allowDirectExecution   Boolean          @default(false) @map("allow_direct_execution")
+  maxTaskDurationSeconds Int              @default(1800) @map("max_task_duration_seconds")
+  maxToolCallsPerRun     Int              @default(50) @map("max_tool_calls_per_run")
+  maxSubagents           Int              @default(0) @map("max_subagents")
+  createdAt              DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  blockOnReviewFindings  Boolean          @default(false) @map("block_on_review_findings")
+  toolRules              ToolPolicyRule[]
+  workspace              Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("workspace_policies")
+}
+
+model ToolPolicyRule {
+  id                String             @id @default(uuid()) @db.Uuid
+  workspacePolicyId String             @map("workspace_policy_id") @db.Uuid
+  toolName          String             @map("tool_name") @db.VarChar(120)
+  actionPattern     String?            @map("action_pattern")
+  riskLevel         RiskLevel          @map("risk_level")
+  decision          PermissionDecision @map("decision")
+  createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  policy            WorkspacePolicy    @relation(fields: [workspacePolicyId], references: [id], onDelete: Cascade)
+
+  @@index([workspacePolicyId, toolName])
+  @@map("tool_policy_rules")
+}
+
+model ProviderConnection {
+  id                  String                        @id @default(uuid()) @db.Uuid
+  userId              String                        @map("user_id") @db.Uuid
+  providerType        ProviderType                  @map("provider_type")
+  displayName         String                        @map("display_name") @db.VarChar(120)
+  encryptedCredential Bytes?                        @map("encrypted_credential")
+  encryptedMetadata   Bytes?                        @map("encrypted_metadata")
+  status              ProviderConnectionStatus      @default(ACTIVE)
+  createdAt           DateTime                      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime                      @updatedAt @map("updated_at") @db.Timestamptz(6)
+  modelRoutes         ModelRoute[]
+  user                User                          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  overrideTasks       Task[]                        @relation("TaskModelOverride")
+  workspaceLinks      WorkspaceProviderConnection[]
+  healthChecks        ProviderHealthCheck[]
+
+  @@index([userId])
+  @@index([status])
+  @@map("provider_connections")
+}
+
+model WorkspaceProviderConnection {
+  id                   String             @id @default(uuid()) @db.Uuid
+  workspaceId          String             @map("workspace_id") @db.Uuid
+  providerConnectionId String             @map("provider_connection_id") @db.Uuid
+  createdAt            DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  providerConnection   ProviderConnection @relation(fields: [providerConnectionId], references: [id], onDelete: Cascade)
+  workspace            Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, providerConnectionId])
+  @@map("workspace_provider_connections")
+}
+
+model ModelRoute {
+  id                   String             @id @default(uuid()) @db.Uuid
+  workspaceId          String             @map("workspace_id") @db.Uuid
+  stage                ModelStage
+  providerConnectionId String             @map("provider_connection_id") @db.Uuid
+  modelIdentifier      String             @map("model_identifier") @db.VarChar(255)
+  fallbackRouteId      String?            @map("fallback_route_id") @db.Uuid
+  priority             Int                @default(100)
+  active               Boolean            @default(true)
+  createdAt            DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  fallbackRoute        ModelRoute?        @relation("RouteFallback", fields: [fallbackRouteId], references: [id])
+  fallbackFor          ModelRoute[]       @relation("RouteFallback")
+  providerConnection   ProviderConnection @relation(fields: [providerConnectionId], references: [id])
+  workspace            Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, stage, active])
+  @@map("model_routes")
+}
+
+model Task {
+  id                           String               @id @default(uuid()) @db.Uuid
+  workspaceId                  String               @map("workspace_id") @db.Uuid
+  projectId                    String               @map("project_id") @db.Uuid
+  createdBy                    String               @map("created_by") @db.Uuid
+  goal                         String
+  constraints                  String?
+  state                        TaskState            @default(QUEUED)
+  selectedModelMode            ModelSelectionMode   @default(ROUTED) @map("selected_model_mode")
+  overrideProviderConnectionId String?              @map("override_provider_connection_id") @db.Uuid
+  overrideModelIdentifier      String?              @map("override_model_identifier") @db.VarChar(255)
+  cancelRequested              Boolean              @default(false) @map("cancel_requested")
+  pauseRequested               Boolean              @default(false) @map("pause_requested")
+  createdAt                    DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                    DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+  completedAt                  DateTime?            @map("completed_at") @db.Timestamptz(6)
+  agentMode                    AgentMode            @default(BUILD) @map("agent_mode")
+  archivedAt                   DateTime?            @map("archived_at") @db.Timestamptz(6)
+  isPinned                     Boolean              @default(false) @map("is_pinned")
+  parentTaskId                 String?              @map("parent_task_id") @db.Uuid
+  taskBranches                 TaskBranch[]
+  approvals                    ApprovalRequest[]
+  checkpoints                  Checkpoint[]
+  contextPackages              ContextPackage[]
+  exports                      SessionExport[]
+  shares                       SessionShare[]
+  events                       TaskEvent[]
+  plans                        TaskPlan[]
+  runs                         TaskRun[]
+  creator                      User                 @relation("TaskCreator", fields: [createdBy], references: [id])
+  overrideProvider             ProviderConnection?  @relation("TaskModelOverride", fields: [overrideProviderConnectionId], references: [id])
+  parentTask                   Task?                @relation("TaskFork", fields: [parentTaskId], references: [id])
+  childTasks                   Task[]               @relation("TaskFork")
+  project                      Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workspace                    Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  toolCalls                    ToolCall[]
+  verifications                VerificationResult[]
+  deployments                  Deployment[]
+  executionTraces              ExecutionTrace[]
+
+  @@index([workspaceId, state])
+  @@index([projectId])
+  @@index([createdBy])
+  @@index([state])
+  @@index([parentTaskId])
+  @@map("tasks")
+}
+
+model TaskRun {
+  id             String    @id @default(uuid()) @db.Uuid
+  taskId         String    @map("task_id") @db.Uuid
+  runNumber      Int       @map("run_number")
+  state          TaskState @default(QUEUED)
+  startedAt      DateTime? @map("started_at") @db.Timestamptz(6)
+  endedAt        DateTime? @map("ended_at") @db.Timestamptz(6)
+  failureCode    String?   @map("failure_code") @db.VarChar(100)
+  failureMessage String?   @map("failure_message")
+  inputTokens    Int?      @default(0) @map("input_tokens")
+  outputTokens   Int?      @default(0) @map("output_tokens")
+  totalTokens    Int?      @default(0) @map("total_tokens")
+  estimatedCost  Float?    @default(0) @map("estimated_cost")
+  modelUsed      String?   @map("model_used") @db.VarChar(255)
+  task           Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, runNumber])
+  @@map("task_runs")
+}
+
+model TaskPlan {
+  id               String     @id @default(uuid()) @db.Uuid
+  taskId           String     @map("task_id") @db.Uuid
+  runId            String     @map("run_id") @db.Uuid
+  version          Int
+  analysis         String
+  affectedFiles    Json       @map("affected_files")
+  steps            Json
+  risks            Json
+  verificationPlan Json       @map("verification_plan")
+  status           PlanStatus @default(DRAFT)
+  createdAt        DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  approvedAt       DateTime?  @map("approved_at") @db.Timestamptz(6)
+  approvedBy       String?    @map("approved_by") @db.Uuid
+  approver         User?      @relation("PlanApprover", fields: [approvedBy], references: [id])
+  task             Task       @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, version])
+  @@index([taskId, status])
+  @@map("task_plans")
+}
+
+model ContextPackage {
+  id              String       @id @default(uuid()) @db.Uuid
+  taskId          String       @map("task_id") @db.Uuid
+  runId           String       @map("run_id") @db.Uuid
+  stage           ContextStage
+  manifest        Json
+  estimatedTokens Int          @default(0) @map("estimated_tokens")
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  task            Task         @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, runId])
+  @@map("context_packages")
+}
+
+model TaskEvent {
+  id             String         @id @default(uuid()) @db.Uuid
+  taskId         String         @map("task_id") @db.Uuid
+  runId          String?        @map("run_id") @db.Uuid
+  sequenceNumber BigInt         @map("sequence_number")
+  eventType      String         @map("event_type") @db.VarChar(100)
+  actorType      EventActorType @default(SYSTEM) @map("actor_type")
+  payload        Json?
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  task           Task           @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, sequenceNumber])
+  @@index([eventType])
+  @@map("task_events")
+}
+
+model ToolCall {
+  id            String            @id @default(uuid()) @db.Uuid
+  taskId        String            @map("task_id") @db.Uuid
+  runId         String            @map("run_id") @db.Uuid
+  toolName      String            @map("tool_name") @db.VarChar(120)
+  riskLevel     RiskLevel         @map("risk_level")
+  inputSummary  Json              @map("input_summary")
+  status        ToolCallStatus    @default(PENDING)
+  resultSummary Json?             @map("result_summary")
+  startedAt     DateTime?         @map("started_at") @db.Timestamptz(6)
+  completedAt   DateTime?         @map("completed_at") @db.Timestamptz(6)
+  approvals     ApprovalRequest[]
+  task          Task              @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, runId])
+  @@index([runId])
+  @@index([status])
+  @@map("tool_calls")
+}
+
+model ApprovalRequest {
+  id               String            @id @default(uuid()) @db.Uuid
+  taskId           String            @map("task_id") @db.Uuid
+  toolCallId       String?           @map("tool_call_id") @db.Uuid
+  requestedScope   ApprovalScope     @map("requested_scope")
+  status           ApprovalStatus    @default(PENDING)
+  requestedByActor ApprovalRequester @default(AGENT) @map("requested_by_actor")
+  decidedBy        String?           @map("decided_by") @db.Uuid
+  expiresAt        DateTime          @map("expires_at") @db.Timestamptz(6)
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  decidedAt        DateTime?         @map("decided_at") @db.Timestamptz(6)
+  decider          User?             @relation("ApprovalDecider", fields: [decidedBy], references: [id])
+  task             Task              @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  toolCall         ToolCall?         @relation(fields: [toolCallId], references: [id])
+
+  @@index([taskId, status])
+  @@index([status, expiresAt])
+  @@map("approval_requests")
+}
+
+model Bridge {
+  id              String              @id @default(uuid()) @db.Uuid
+  userId          String              @map("user_id") @db.Uuid
+  name            String              @db.VarChar(120)
+  version         String              @db.VarChar(50)
+  status          BridgeStatus        @default(PENDING)
+  capabilities    Json?
+  lastSeenAt      DateTime?           @map("last_seen_at") @db.Timestamptz(6)
+  createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  deviceTokenHash String?             @unique @map("device_token_hash")
+  projectRoots    BridgeProjectRoot[]
+  user            User                @relation(fields: [userId], references: [id])
+  projects        Project[]
+
+  @@index([userId])
+  @@index([status])
+  @@map("bridges")
+}
+
+model BridgeProjectRoot {
+  id                     String   @id @default(uuid()) @db.Uuid
+  bridgeId               String   @map("bridge_id") @db.Uuid
+  displayName            String   @map("display_name") @db.VarChar(160)
+  canonicalRootReference String   @map("canonical_root_reference")
+  createdAt              DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  bridge                 Bridge   @relation(fields: [bridgeId], references: [id], onDelete: Cascade)
+
+  @@unique([bridgeId, canonicalRootReference])
+  @@map("bridge_project_roots")
+}
+
+model McpServer {
+  id              String               @id @default(uuid()) @db.Uuid
+  ownerId         String               @map("owner_id") @db.Uuid
+  name            String               @db.VarChar(120)
+  transportType   McpTransportType     @map("transport_type")
+  encryptedConfig Bytes                @map("encrypted_config")
+  status          McpServerStatus      @default(DISABLED)
+  createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+  discoveredTools Json?                @map("discovered_tools")
+  owner           User                 @relation(fields: [ownerId], references: [id])
+  workspaces      WorkspaceMcpServer[]
+
+  @@index([ownerId])
+  @@map("mcp_servers")
+}
+
+model WorkspaceMcpServer {
+  id          String    @id @default(uuid()) @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  mcpServerId String    @map("mcp_server_id") @db.Uuid
+  enabled     Boolean   @default(false)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  server      McpServer @relation(fields: [mcpServerId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, mcpServerId])
+  @@map("workspace_mcp_servers")
+}
+
+model Checkpoint {
+  id             String         @id @default(uuid()) @db.Uuid
+  taskId         String         @map("task_id") @db.Uuid
+  projectId      String         @map("project_id") @db.Uuid
+  checkpointType CheckpointType @default(PRE_EXECUTION) @map("checkpoint_type")
+  stateReference Json           @map("state_reference")
+  createdBy      String?        @map("created_by") @db.Uuid
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  creator        User?          @relation("CheckpointCreator", fields: [createdBy], references: [id])
+  project        Project        @relation(fields: [projectId], references: [id])
+  task           Task           @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  deployments    Deployment[]
+
+  @@index([taskId])
+  @@map("checkpoints")
+}
+
+model VerificationResult {
+  id              String             @id @default(uuid()) @db.Uuid
+  taskId          String             @map("task_id") @db.Uuid
+  runId           String             @map("run_id") @db.Uuid
+  command         String
+  status          VerificationStatus @default(SKIPPED)
+  outputReference String?            @map("output_reference")
+  createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  task            Task               @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, runId])
+  @@map("verification_results")
+}
+
+model AuditLog {
+  id          String     @id @default(uuid()) @db.Uuid
+  actorUserId String?    @map("actor_user_id") @db.Uuid
+  workspaceId String?    @map("workspace_id") @db.Uuid
+  action      String     @db.VarChar(120)
+  entityType  String     @map("entity_type") @db.VarChar(80)
+  entityId    String?    @map("entity_id") @db.Uuid
+  metadata    Json?
+  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  actor       User?      @relation(fields: [actorUserId], references: [id])
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id])
+
+  @@index([workspaceId, createdAt])
+  @@index([actorUserId, createdAt])
+  @@map("audit_logs")
+}
+
+model WorkspaceInvite {
+  id          String        @id @default(uuid()) @db.Uuid
+  workspaceId String        @map("workspace_id") @db.Uuid
+  email       String        @db.VarChar(320)
+  role        WorkspaceRole @default(MEMBER)
+  tokenHash   String        @unique @map("token_hash")
+  invitedBy   String        @map("invited_by") @db.Uuid
+  expiresAt   DateTime      @map("expires_at") @db.Timestamptz(3)
+  acceptedAt  DateTime?     @map("accepted_at") @db.Timestamptz(3)
+  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  inviter     User          @relation(fields: [invitedBy], references: [id])
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, email])
+  @@index([workspaceId])
+  @@index([email])
+  @@index([invitedBy])
+  @@map("workspace_invites")
+}
+
+model SessionExport {
+  id          String   @id @default(uuid()) @db.Uuid
+  taskId      String   @map("task_id") @db.Uuid
+  exportedBy  String   @map("exported_by") @db.Uuid
+  exportedAt  DateTime @default(now()) @map("exported_at") @db.Timestamptz(6)
+  packageJson Json     @map("package_json")
+  exporter    User     @relation(fields: [exportedBy], references: [id])
+  task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@map("session_exports")
+}
+
+model SessionShare {
+  id         String    @id @default(uuid()) @db.Uuid
+  taskId     String    @map("task_id") @db.Uuid
+  sharedBy   String    @map("shared_by") @db.Uuid
+  tokenHash  String    @unique @map("token_hash")
+  permission String    @default("view_only") @db.VarChar(50)
+  expiresAt  DateTime? @map("expires_at") @db.Timestamptz(6)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  sharer     User      @relation(fields: [sharedBy], references: [id])
+  task       Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@index([tokenHash])
+  @@map("session_shares")
+}
+
+model Session {
+  id                String        @id @default(uuid()) @db.Uuid
+  name              String        @db.VarChar(200)
+  projectId         String        @map("project_id") @db.Uuid
+  workspaceId       String        @map("workspace_id") @db.Uuid
+  status            SessionStatus @default(ACTIVE)
+  conversation      Json          @default("[]")
+  toolCalls         Json          @default("[]") @map("tool_calls")
+  plans             Json          @default("[]")
+  approvals         Json          @default("[]")
+  filesChanged      String[]      @default([]) @map("files_changed")
+  checkpoints       String[]      @default([])
+  modelInfo         Json          @default("{}") @map("model_info")
+  executionProvider String        @default("unknown") @map("execution_provider")
+  agentState        Json          @default("{}") @map("agent_state")
+  verification      Json          @default("{}")
+  deployment        Json?
+  memoryReferences  String[]      @default([]) @map("memory_references")
+  forkedFrom        String?       @map("forked_from") @db.Uuid
+  archivedAt        DateTime?     @map("archived_at") @db.Timestamptz(6)
+  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  project   Project   @relation(fields: [projectId], references: [id])
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@index([projectId])
+  @@index([workspaceId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("sessions")
+}
+
+enum SessionStatus {
+  ACTIVE
+  PAUSED
+  ARCHIVED
+  DELETED
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+enum ExecutionMode {
+  CLOUD
+  LOCAL_CONNECTED
+  HYBRID
+}
+
+enum WorkspaceStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum WorkspaceRole {
+  OWNER
+  MEMBER
+  VIEWER
+}
+
+enum PlatformRole {
+  USER
+  PLATFORM_ADMIN
+}
+
+enum ProjectConnectionType {
+  CLOUD
+  LOCAL_BRIDGE
+}
+
+enum ProjectStatus {
+  AVAILABLE
+  DEGRADED
+  UNAVAILABLE
+}
+
+enum RiskLevel {
+  READ
+  WRITE
+  DESTRUCTIVE
+  EXTERNAL
+}
+
+enum PermissionDecision {
+  ALLOW
+  ASK
+  DENY
+}
+
+enum ProviderType {
+  ANTHROPIC
+  OPENAI
+  GOOGLE
+  OLLAMA
+  OPENAI_COMPATIBLE
+  TEST
+}
+
+enum ProviderConnectionStatus {
+  ACTIVE
+  DISABLED
+  ERROR
+}
+
+enum ModelStage {
+  PLANNING
+  IMPLEMENTATION
+  REVIEW
+}
+
+enum TaskState {
+  QUEUED
+  INITIALIZING
+  UNDERSTANDING
+  GATHERING_CONTEXT
+  PLANNING
+  WAITING_FOR_APPROVAL
+  EXECUTING
+  WAITING_FOR_TOOL_APPROVAL
+  OBSERVING
+  REPLANNING
+  VERIFYING
+  REVIEWING
+  COMPLETED
+  FAILED
+  CANCELLED
+  INTERRUPTED
+}
+
+enum ModelSelectionMode {
+  MANUAL
+  ROUTED
+}
+
+enum PlanStatus {
+  DRAFT
+  APPROVED
+  REJECTED
+  SUPERSEDED
+}
+
+enum ContextStage {
+  PLANNING
+  IMPLEMENTATION
+  REVIEW
+}
+
+enum EventActorType {
+  USER
+  SYSTEM
+  AGENT
+  TOOL
+  BRIDGE
+}
+
+enum ToolCallStatus {
+  PENDING
+  WAITING_APPROVAL
+  RUNNING
+  SUCCEEDED
+  FAILED
+  TIMED_OUT
+  DENIED
+  CANCELLED
+}
+
+enum ApprovalScope {
+  ONCE
+  TASK
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  DENIED
+  EXPIRED
+}
+
+enum ApprovalRequester {
+  AGENT
+  SYSTEM
+}
+
+enum BridgeStatus {
+  PENDING
+  CONNECTED
+  DEGRADED
+  DISCONNECTED
+  REVOKED
+}
+
+enum McpTransportType {
+  STDIO
+  HTTP
+  SSE
+}
+
+enum AgentMode {
+  BUILD
+  PLAN
+  ASK
+  REVIEW
+  FIX
+}
+
+enum McpServerStatus {
+  DISABLED
+  ACTIVE
+  ERROR
+}
+
+enum CheckpointType {
+  PRE_EXECUTION
+  MANUAL
+}
+
+enum VerificationStatus {
+  PASSED
+  FAILED
+  SKIPPED
+  ERROR
+}
+
+enum MemoryCategory {
+  architecture_decision
+  coding_convention
+  previous_bug
+  user_preference
+  deployment_config
+  recurring_failure
+  lesson_learned
+  file_pattern
+  dependency_note
+  performance_note
+}
+
+enum MemorySource {
+  agent_observation
+  user_input
+  code_analysis
+  error_pattern
+}
+
+// ── Deployment ──────────────────────────────────────────────
+
+model ExecutionTrace {
+  id           String   @id @default(uuid()) @db.Uuid
+  taskId       String   @map("task_id") @db.Uuid
+  runId        String   @map("run_id") @db.Uuid
+  goal         String
+  reasoning    Json     @default("[]")
+  plan         Json     @default("[]")
+  executions   Json     @default("[]")
+  observations Json     @default("[]")
+  decisions    Json     @default("[]")
+  evidence     Json     @default("[]")
+  verification Json     @default("[]")
+  outcome      Json     @default("{}")
+  tokenUsage   Json     @default("{}") @map("token_usage")
+  duration     Int      @default(0)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  completedAt  DateTime? @map("completed_at") @db.Timestamptz(6)
+  task         Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, createdAt])
+  @@map("execution_traces")
+}
+
+model ProjectMemory {
+  id             String         @id @default(uuid()) @db.Uuid
+  projectId      String         @map("project_id") @db.Uuid
+  category       MemoryCategory
+  key            String         @db.VarChar(255)
+  value          String
+  context        String
+  confidence     Float          @default(0.5)
+  source         MemorySource   @default(agent_observation)
+  references     Json           @default("[]")
+  accessCount    Int            @default(0) @map("access_count")
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  lastAccessedAt DateTime       @map("last_accessed_at") @db.Timestamptz(6)
+  project        Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, category])
+  @@index([projectId, key])
+  @@map("project_memories")
+}
+
+model Deployment {
+  id               String              @id @default(uuid()) @db.Uuid
+  projectId        String              @map("project_id") @db.Uuid
+  taskId           String?             @map("task_id") @db.Uuid
+  checkpointId     String?             @map("checkpoint_id") @db.Uuid
+  createdBy        String              @map("created_by") @db.Uuid
+  environment      DeploymentEnv       @default(production)
+  status           DeploymentStatus    @default(QUEUED)
+  buildCommand     String              @default("npm run build") @map("build_command")
+  outputDir        String?             @map("output_dir")
+  deploymentUrl    String?             @map("deployment_url")
+  previewUrl       String?             @map("preview_url")
+  buildLogs        String?             @map("build_logs")
+  runtimeLogs      String?             @map("runtime_logs")
+  sourceRevision   String?             @map("source_revision") @db.VarChar(255)
+  sourceBranch     String?             @map("source_branch") @db.VarChar(255)
+  failureReason    String?             @map("failure_reason")
+  rollbackOfId     String?             @map("rollback_of_id") @db.Uuid
+  metadata         Json?
+  startedAt        DateTime?           @map("started_at") @db.Timestamptz(6)
+  buildCompletedAt DateTime?           @map("build_completed_at") @db.Timestamptz(6)
+  deployedAt       DateTime?           @map("deployed_at") @db.Timestamptz(6)
+  completedAt      DateTime?           @map("completed_at") @db.Timestamptz(6)
+  createdAt        DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+  project          Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  task             Task?               @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  checkpoint       Checkpoint?         @relation(fields: [checkpointId], references: [id])
+  creator          User                @relation(fields: [createdBy], references: [id])
+  rollbackOf       Deployment?         @relation("DeploymentRollback", fields: [rollbackOfId], references: [id])
+  rollbackTargets  Deployment[]        @relation("DeploymentRollback")
+  comments         DeploymentComment[]
+
+  @@index([projectId, createdAt])
+  @@index([status])
+  @@index([taskId])
+  @@map("deployments")
+}
+
+enum DeploymentEnv {
+  production
+  preview
+  staging
+}
+
+enum DeploymentStatus {
+  QUEUED
+  PREPARING
+  BUILDING
+  DEPLOYING
+  HEALTH_CHECKING
+  READY
+  FAILED
+  CANCELLED
+  ROLLED_BACK
+}
+
+model DeploymentSecret {
+  id             String                 @id @default(uuid()) @db.Uuid
+  projectId      String                 @map("project_id") @db.Uuid
+  providerType   DeploymentProviderType @map("provider_type")
+  name           String                 @db.VarChar(255)
+  encryptedValue String                 @map("encrypted_value")
+  metadata       Json                   @default("{}")
+  lastUsedAt     DateTime?              @map("last_used_at") @db.Timestamptz(6)
+  createdAt      DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+  project        Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, providerType, name])
+  @@index([projectId])
+  @@map("deployment_secrets")
+}
+
+enum WebhookSubStatus {
+  ACTIVE
+  DISABLED
+  DEAD
+}
+
+enum WebhookDeliveryStatus {
+  PENDING
+  DELIVERED
+  FAILED
+  DEAD
+}
+
+enum DeploymentProviderType {
+  self_hosted
+  vercel
+  netlify
+  cloudflare
+  railway
+  render
+}
+
+model Organization {
+  id          String               @id @default(uuid()) @db.Uuid
+  name        String               @db.VarChar(200)
+  slug        String               @unique @db.VarChar(100)
+  description String?
+  status      WorkspaceStatus      @default(ACTIVE)
+  ownerId     String               @map("owner_id") @db.Uuid
+  createdAt   DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+  members     OrganizationMember[]
+  workspaces  Workspace[]
+  settings    OrganizationSetting?
+  domains     OrganizationDomain[]
+  owner       User                 @relation("OrganizationOwner", fields: [ownerId], references: [id])
+
+  @@index([ownerId])
+  @@index([slug])
+  @@map("organizations")
+}
+
+model OrganizationMember {
+  id             String        @id @default(uuid()) @db.Uuid
+  organizationId String        @map("organization_id") @db.Uuid
+  userId         String        @map("user_id") @db.Uuid
+  role           WorkspaceRole @default(MEMBER)
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([userId])
+  @@map("organization_members")
+}
+
+model AuditLogEntry {
+  id          String     @id @default(uuid()) @db.Uuid
+  userId      String?    @map("user_id") @db.Uuid
+  workspaceId String?    @map("workspace_id") @db.Uuid
+  action      String     @db.VarChar(100)
+  entityType  String     @map("entity_type") @db.VarChar(50)
+  entityId    String?    @map("entity_id") @db.Uuid
+  metadata    Json?
+  ipAddress   String?    @map("ip_address") @db.VarChar(45)
+  userAgent   String?    @map("user_agent")
+  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  user        User?      @relation(fields: [userId], references: [id])
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id])
+
+  @@index([userId])
+  @@index([workspaceId])
+  @@index([action])
+  @@index([entityType])
+  @@index([createdAt])
+  @@map("audit_log_entries")
+}
+
+model UsageRecord {
+  id              String   @id @default(uuid()) @db.Uuid
+  userId          String   @map("user_id") @db.Uuid
+  workspaceId     String?  @map("workspace_id") @db.Uuid
+  taskId          String?  @map("task_id") @db.Uuid
+  providerType    String   @map("provider_type") @db.VarChar(50)
+  modelIdentifier String   @map("model_identifier") @db.VarChar(255)
+  inputTokens     Int      @default(0) @map("input_tokens")
+  outputTokens    Int      @default(0) @map("output_tokens")
+  totalTokens     Int      @default(0) @map("total_tokens")
+  estimatedCost   Float    @default(0) @map("estimated_cost")
+  stage           String?  @map("stage") @db.VarChar(50)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([userId])
+  @@index([workspaceId])
+  @@index([modelIdentifier])
+  @@index([createdAt])
+  @@map("usage_records")
+}
+
+model ApiKey {
+  id          String    @id @default(uuid()) @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  name        String    @db.VarChar(100)
+  keyHash     String    @unique @map("key_hash")
+  keyPrefix   String    @map("key_prefix") @db.VarChar(10)
+  permissions Json      @default("{}")
+  lastUsedAt  DateTime? @map("last_used_at") @db.Timestamptz(6)
+  expiresAt   DateTime? @map("expires_at") @db.Timestamptz(6)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([keyHash])
+  @@map("api_keys")
+}
+
+model FeatureFlag {
+  id          String    @id @default(uuid()) @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  key         String    @db.VarChar(100)
+  enabled     Boolean   @default(false)
+  config      Json      @default("{}")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, key])
+  @@map("feature_flags")
+}
+
+model DeploymentEnvVar {
+  id             String   @id @default(uuid()) @db.Uuid
+  projectId      String   @map("project_id") @db.Uuid
+  environment    String   @db.VarChar(50)
+  key            String   @db.VarChar(255)
+  encryptedValue String   @map("encrypted_value")
+  isSecret       Boolean  @default(false) @map("is_secret")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, environment, key])
+  @@index([projectId])
+  @@map("deployment_env_vars")
+}
+
+model TaskTemplate {
+  id          String    @id @default(uuid()) @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  name        String    @db.VarChar(200)
+  description String?
+  goal        String    @db.Text
+  agentMode   String    @map("agent_mode") @db.VarChar(50)
+  config      Json      @default("{}")
+  usageCount  Int       @default(0) @map("usage_count")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("task_templates")
+}
+
+model DeploymentComment {
+  id           String     @id @default(uuid()) @db.Uuid
+  deploymentId String     @map("deployment_id") @db.Uuid
+  userId       String     @map("user_id") @db.Uuid
+  content      String     @db.Text
+  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  deployment   Deployment @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
+  user         User       @relation(fields: [userId], references: [id])
+
+  @@index([deploymentId])
+  @@map("deployment_comments")
+}
+
+model CostAlert {
+  id             String    @id @default(uuid()) @db.Uuid
+  workspaceId    String    @map("workspace_id") @db.Uuid
+  thresholdType  String    @map("threshold_type") @db.VarChar(50)
+  thresholdValue Float     @map("threshold_value")
+  period         String    @db.VarChar(50)
+  enabled        Boolean   @default(true)
+  lastTriggered  DateTime? @map("last_triggered") @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("cost_alerts")
+}
+
+model TaskBranch {
+  id          String   @id @default(uuid()) @db.Uuid
+  taskId      String   @map("task_id") @db.Uuid
+  name        String   @db.VarChar(100)
+  parentRunId String?  @map("parent_run_id") @db.Uuid
+  status      String   @default("ACTIVE") @db.VarChar(50)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@map("task_branches")
+}
+
+model ProjectTeamPermission {
+  id         String   @id @default(uuid()) @db.Uuid
+  projectId  String   @map("project_id") @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  permission String   @db.VarChar(50)
+  grantedBy  String   @map("granted_by") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id])
+
+  @@unique([projectId, userId, permission])
+  @@index([projectId])
+  @@index([userId])
+  @@map("project_team_permissions")
+}
+
+model Notification {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  title     String    @db.VarChar(255)
+  message   String    @db.Text
+  type      String    @db.VarChar(50)
+  metadata  Json?
+  readAt    DateTime? @map("read_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
+model WebhookSubscription {
+  id           String               @id @default(uuid()) @db.Uuid
+  workspaceId  String               @map("workspace_id") @db.Uuid
+  url          String               @db.VarChar(2048)
+  eventTypes   String[]             @map("event_types")
+  secret       String?              @db.VarChar(255)
+  maxRetries   Int                  @default(3) @map("max_retries")
+  status       WebhookSubStatus     @default(ACTIVE)
+  createdAt    DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+  workspace    Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  deliveryLogs WebhookDeliveryLog[]
+
+  @@index([workspaceId, status])
+  @@map("webhook_subscriptions")
+}
+
+model WebhookDeliveryLog {
+  id             String                @id @default(uuid()) @db.Uuid
+  subscriptionId String                @map("subscription_id") @db.Uuid
+  event          String                @db.VarChar(100)
+  payload        Json
+  status         WebhookDeliveryStatus @default(PENDING)
+  attemptCount   Int                   @default(0) @map("attempt_count")
+  maxAttempts    Int                   @default(3) @map("max_attempts")
+  lastError      String?               @map("last_error")
+  nextRetryAt    DateTime?             @map("next_retry_at") @db.Timestamptz(6)
+  deliveredAt    DateTime?             @map("delivered_at") @db.Timestamptz(6)
+  createdAt      DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  subscription   WebhookSubscription   @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId, status])
+  @@index([status, nextRetryAt])
+  @@map("webhook_delivery_logs")
+}
+
+model SsoConfig {
+  id              String    @id @default(uuid()) @db.Uuid
+  workspaceId     String    @map("workspace_id") @db.Uuid
+  provider        String    @db.VarChar(50) // okta, azure_ad, google, saml
+  enabled         Boolean   @default(false)
+  clientId        String?   @map("client_id")
+  clientSecret    String?   @map("client_secret") // encrypted
+  issuerUrl       String?   @map("issuer_url")
+  metadataUrl     String?   @map("metadata_url")
+  metadataXml     String?   @map("metadata_xml") // encrypted
+  idpCertificate  String?   @map("idp_certificate") // PEM public key for SAML signature verification
+  domain          String?   @db.VarChar(255) // email domain match
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, provider])
+  @@index([workspaceId])
+  @@index([domain])
+  @@map("sso_configs")
+}
+
+model RateLimit {
+  id           String    @id @default(uuid()) @db.Uuid
+  workspaceId  String    @map("workspace_id") @db.Uuid
+  userId       String?   @map("user_id") @db.Uuid
+  endpoint     String    @db.VarChar(255)
+  windowMs     Int       @map("window_ms")
+  maxRequests  Int       @map("requests")
+  currentCount Int       @default(0) @map("current_count")
+  windowStart  DateTime  @map("window_start") @db.Timestamptz(6)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  workspace    Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@unique([workspaceId, userId, endpoint, windowStart])
+  @@index([workspaceId, endpoint, windowStart])
+  @@index([userId, endpoint, windowStart])
+  @@map("rate_limits")
+}
+
+// ── File Versioning ────────────────────────────────────────
+
+model FileVersion {
+  id          String   @id @default(uuid()) @db.Uuid
+  projectId   String   @map("project_id") @db.Uuid
+  path        String   @db.VarChar(1024)
+  version     Int
+  size        Int      @default(0)
+  mimeType    String?  @map("mime_type") @db.VarChar(255)
+  contentHash String   @map("content_hash") @db.VarChar(64)
+  uploadedBy  String?  @map("uploaded_by") @db.Uuid
+  metadata    Json?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  uploader    User?    @relation("FileVersionUploader", fields: [uploadedBy], references: [id])
+
+  @@unique([projectId, path, version])
+  @@index([projectId, path])
+  @@index([projectId])
+  @@map("file_versions")
+}
+
+// ── Email Delivery Tracking ────────────────────────────────
+
+model EmailDelivery {
+  id             String      @id @default(uuid()) @db.Uuid
+  recipientEmail String      @map("recipient_email") @db.VarChar(320)
+  templateType   String      @map("template_type") @db.VarChar(100)
+  subject        String      @db.VarChar(500)
+  status         EmailStatus @default(QUEUED)
+  workspaceId    String?     @map("workspace_id") @db.Uuid
+  metadata       Json?
+  externalId     String?     @map("external_id") @db.VarChar(255)
+  errorMessage   String?     @map("error_message")
+  queuedAt       DateTime    @default(now()) @map("queued_at") @db.Timestamptz(6)
+  sentAt         DateTime?   @map("sent_at") @db.Timestamptz(6)
+  deliveredAt    DateTime?   @map("delivered_at") @db.Timestamptz(6)
+  openedAt       DateTime?   @map("opened_at") @db.Timestamptz(6)
+  bouncedAt      DateTime?   @map("bounced_at") @db.Timestamptz(6)
+  complaintAt    DateTime?   @map("complaint_at") @db.Timestamptz(6)
+  createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  workspace      Workspace?  @relation(fields: [workspaceId], references: [id])
+
+  @@index([recipientEmail])
+  @@index([workspaceId])
+  @@index([status])
+  @@index([templateType])
+  @@index([createdAt])
+  @@map("email_deliveries")
+}
+
+enum EmailStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  OPENED
+  BOUNCED
+  COMPLAINT
+}
+
+// ── Email Unsubscribe ──────────────────────────────────────
+
+model EmailUnsubscribe {
+  id              String   @id @default(uuid()) @db.Uuid
+  email           String   @db.VarChar(320)
+  unsubscribeType String   @map("unsubscribe_type") @db.VarChar(100)
+  workspaceId     String?  @map("workspace_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([email, unsubscribeType])
+  @@index([email])
+  @@index([workspaceId])
+  @@map("email_unsubscribes")
+}
+
+// ── Billing ──────────────────────────────────────────────────
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  INCOMPLETE
+  INCOMPLETE_EXPIRED
+  TRIALING
+  UNPAID
+  PAUSED
+}
+
+model Subscription {
+  id                   String             @id @default(uuid()) @db.Uuid
+  workspaceId          String             @unique @map("workspace_id") @db.Uuid
+  stripeCustomerId     String?            @unique @map("stripe_customer_id") @db.VarChar(255)
+  stripeSubscriptionId String?            @unique @map("stripe_subscription_id") @db.VarChar(255)
+  stripePriceId        String?            @map("stripe_price_id") @db.VarChar(255)
+  stripeSessionId      String?            @unique @map("stripe_session_id") @db.VarChar(255)
+  plan                 String             @default("free") @db.VarChar(50)
+  status               SubscriptionStatus @default(ACTIVE)
+  currentPeriodStart   DateTime?          @map("current_period_start") @db.Timestamptz(6)
+  currentPeriodEnd     DateTime?          @map("current_period_end") @db.Timestamptz(6)
+  cancelAtPeriodEnd    Boolean            @default(false) @map("cancel_at_period_end")
+  trialStart           DateTime?          @map("trial_start") @db.Timestamptz(6)
+  trialEnd             DateTime?          @map("trial_end") @db.Timestamptz(6)
+  canceledAt           DateTime?          @map("canceled_at") @db.Timestamptz(6)
+  metadata             Json?
+  createdAt            DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+  workspace            Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([stripeCustomerId])
+  @@index([stripeSubscriptionId])
+  @@map("subscriptions")
+}
+
+model WorkspaceBackup {
+  id                 String           @id @default(uuid()) @db.Uuid
+  workspaceId        String           @map("workspace_id") @db.Uuid
+  sizeBytes          Int              @default(0) @map("size_bytes")
+  data               Json
+  createdAt          DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  workspace          Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt(sort: Desc)])
+  @@map("workspace_backups")
+}
+
+model OrganizationSetting {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @unique @map("organization_id") @db.Uuid
+  settings       Json         @default("{}")
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("organization_settings")
+}
+
+model OrganizationDomain {
+  id               String           @id @default(uuid()) @db.Uuid
+  organizationId   String           @map("organization_id") @db.Uuid
+  domain           String           @db.VarChar(255)
+  status           String           @default("PENDING") @db.VarChar(50)
+  verificationToken String          @map("verification_token") @db.VarChar(255)
+  verifiedAt       DateTime?        @map("verified_at") @db.Timestamptz(6)
+  createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  organization     Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, domain])
+  @@map("organization_domains")
+}
+
+model AuditRetentionSetting {
+  id          String      @id @default(uuid()) @db.Uuid
+  workspaceId String      @unique @map("workspace_id") @db.Uuid
+  settings    Json        @default("{}")
+  createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+  workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("audit_retention_settings")
+}
+
+// ── Knowledge Base ──────────────────────────────────────────
+
+enum KnowledgeEntryType {
+  DOCUMENT
+  CODE_SNIPPET
+  LINK
+  NOTE
+}
+
+model KnowledgeEntry {
+  id          String              @id @default(uuid()) @db.Uuid
+  workspaceId String              @map("workspace_id") @db.Uuid
+  title       String              @db.VarChar(500)
+  content     String              @db.Text
+  type        KnowledgeEntryType  @default(NOTE)
+  tags        Json                @default("[]")
+  createdAt   DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+  workspace   Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, type])
+  @@index([workspaceId, createdAt])
+  @@map("knowledge_entries")
+}
+
+// ── WebContainer Sessions ────────────────────────────────────
+
+model WebContainerSession {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  status      String   @default("CREATING") @db.VarChar(50)
+  expiresAt   DateTime @map("expires_at") @db.Timestamptz(6)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, status])
+  @@index([expiresAt])
+  @@map("webcontainer_sessions")
+}
+
+model WebContainerSetting {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @unique @map("workspace_id") @db.Uuid
+  settings    Json     @default("{}")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("webcontainer_settings")
+}
+
+// ── Provider Health History ──────────────────────────────────
+
+model ProviderHealthCheck {
+  id                 String   @id @default(uuid()) @db.Uuid
+  providerConnectionId String @map("provider_connection_id") @db.Uuid
+  ok                 Boolean
+  latencyMs          Int      @map("latency_ms")
+  checkedAt          DateTime @default(now()) @map("checked_at") @db.Timestamptz(6)
+  providerConnection ProviderConnection @relation(fields: [providerConnectionId], references: [id], onDelete: Cascade)
+
+  @@index([providerConnectionId, checkedAt])
+  @@map("provider_health_checks")
+}

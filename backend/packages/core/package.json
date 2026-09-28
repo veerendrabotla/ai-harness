@@ -1,0 +1,16 @@
+{
+  "name": "@ai-harness/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "dependencies": {
+    "@ai-harness/agent-runtime": "*",
+    "@ai-harness/conflict-resolution": "*",
+    "@ai-harness/contracts": "*",
+    "@ai-harness/project-memory": "*",
+    "@ai-harness/session-engine": "*",
+    "@ai-harness/shared": "*"
+  }
+}

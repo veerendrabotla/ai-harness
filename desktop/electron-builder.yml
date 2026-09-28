@@ -1,0 +1,90 @@
+appId: com.ai-harness.desktop
+productName: AI Harness
+copyright: Copyright © 2026
+
+directories:
+  # release2: a leftover app.asar in release/ is held by an external file
+  # lock (antivirus) on Windows; build into a fresh dir until it clears.
+  output: release2
+  buildResources: assets
+
+files:
+  - dist/**/*
+  - assets/**/*
+  - "!node_modules/**/*"
+  - package.json
+
+extraMetadata:
+  main: dist/main.js
+
+asar: true
+
+# No native modules to rebuild. Critical in this npm-workspaces monorepo:
+# the production-dependency install step otherwise prunes the hoisted root
+# devDependencies (electron, electron-builder, app-builder-bin) mid-build.
+npmRebuild: false
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: portable
+      arch:
+        - x64
+  icon: assets/icon.ico
+  artifactName: "${productName}-${version}-win-${arch}.${ext}"
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  deleteAppDataOnUninstall: false
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: AI Harness
+
+mac:
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+  icon: assets/icon.icns
+  category: public.app-category.developer-tools
+  hardenedRuntime: true
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  artifactName: "${productName}-${version}-mac-${arch}.${ext}"
+
+dmg:
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
+
+linux:
+  target:
+    - target: AppImage
+      arch:
+        - x64
+    - target: deb
+      arch:
+        - x64
+  icon: assets/icon.png
+  category: Development
+  artifactName: "${productName}-${version}-linux-${arch}.${ext}"
+
+appImage:
+  artifactName: "${productName}-${version}-linux-${arch}.${ext}"
+
+deb:
+  artifactName: "${productName}-${version}-linux-${arch}.${ext}"
+
+# Publishing/update feed is intentionally not configured: this repo has no
+# git remote yet. Add a `publish:` block (github provider) once a real
+# repository URL exists — in-app auto-update requires it.
+

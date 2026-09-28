@@ -1,0 +1,141 @@
+# Deploys container images to Artifact Registry and applies Terraform.
+# Requires GitHub environment "production" (manual approval) + secrets:
+#   GCP_WORKLOAD_IDENTITY_PROVIDER, GCP_SERVICE_ACCOUNT,
+#   TF_VAR_db_password, TF_VAR_jwt_access_secret, TF_VAR_csrf_secret, TF_VAR_encryption_key, TF_VAR_bridge_internal_token
+name: deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  NODE_VERSION: "22"
+
+jobs:
+  ci-gate:
+    name: CI gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Lint
+        run: npm run lint
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Unit tests
+        run: npx vitest run --exclude '**/races.integration.test.ts' --exclude '**/session-portability.integration.test.ts'
+
+  build-push:
+    name: Build & push images
+    needs: [ci-gate]
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: meta
+        run: echo "tag=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Configure docker
+        run: gcloud auth configure-docker "${{ vars.GCP_REGION }}-docker.pkg.dev" --quiet
+      - name: Build & push images
+        env:
+          REGION: ${{ vars.GCP_REGION }}
+          PROJECT: ${{ vars.GCP_PROJECT_ID }}
+          TAG: ${{ steps.meta.outputs.tag }}
+        run: |
+          docker build -f Dockerfile.api     -t "$REGION-docker.pkg.dev/$PROJECT/ai-harness/api:$TAG" .
+          docker build -f Dockerfile.worker  -t "$REGION-docker.pkg.dev/$PROJECT/ai-harness/worker:$TAG" .
+          docker build -f Dockerfile.gateway -t "$REGION-docker.pkg.dev/$PROJECT/ai-harness/gateway:$TAG" .
+          for s in api worker gateway; do docker push "$REGION-docker.pkg.dev/$PROJECT/ai-harness/$s:$TAG"; done
+
+  terraform-apply:
+    name: Terraform apply
+    needs: [build-push]
+    runs-on: ubuntu-latest
+    environment: production
+    defaults: { run: { working-directory: infra/terraform } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with: { terraform_version: 1.11.4 }
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+      - run: terraform init
+      - name: Apply
+        env:
+          TF_VAR_project_id: ${{ vars.GCP_PROJECT_ID }}
+          TF_VAR_region: ${{ vars.GCP_REGION }}
+          TF_VAR_db_password: ${{ secrets.TF_VAR_db_password }}
+          TF_VAR_jwt_access_secret: ${{ secrets.TF_VAR_jwt_access_secret }}
+          TF_VAR_csrf_secret: ${{ secrets.TF_VAR_csrf_secret }}
+          TF_VAR_encryption_key: ${{ secrets.TF_VAR_encryption_key }}
+          TF_VAR_bridge_internal_token: ${{ secrets.TF_VAR_bridge_internal_token }}
+        run: |
+          terraform apply -auto-approve \
+            -replace="google_cloud_run_v2_service.api" \
+            -var="image_tag=${{ needs.build-push.outputs.image_tag }}"
+
+  smoke-test:
+    name: Smoke test
+    needs: [terraform-apply]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wait for deployment to stabilize
+        run: sleep 30
+      - name: Health check
+        run: |
+          API_URL="${{ vars.GCP_API_URL }}/healthz"
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$API_URL" || true)
+          echo "Health check returned: $HTTP_CODE"
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::Health check returned $HTTP_CODE — deployment may have failed"
+            exit 1
+          fi
+
+  rollback:
+    name: Rollback on failure
+    if: failure()
+    needs: [terraform-apply]
+    runs-on: ubuntu-latest
+    environment: production
+    defaults: { run: { working-directory: infra/terraform } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with: { terraform_version: 1.11.4 }
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+      - run: terraform init
+      - name: Revert to previous revision
+        env:
+          TF_VAR_project_id: ${{ vars.GCP_PROJECT_ID }}
+          TF_VAR_region: ${{ vars.GCP_REGION }}
+          TF_VAR_db_password: ${{ secrets.TF_VAR_db_password }}
+          TF_VAR_jwt_access_secret: ${{ secrets.TF_VAR_jwt_access_secret }}
+          TF_VAR_csrf_secret: ${{ secrets.TF_VAR_csrf_secret }}
+          TF_VAR_encryption_key: ${{ secrets.TF_VAR_encryption_key }}
+          TF_VAR_bridge_internal_token: ${{ secrets.TF_VAR_bridge_internal_token }}
+        run: terraform apply -auto-approve -target="google_cloud_run_v2_service.api"

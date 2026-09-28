@@ -1,0 +1,15 @@
+node_modules
+**/node_modules
+.next
+dist
+coverage
+*.log
+.env
+.env.*
+!.env.example
+.git
+docs
+npm-install.log
+api-run.log
+worker-run.log
+gateway-run.log

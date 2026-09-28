@@ -1,0 +1,170 @@
+@import "tailwindcss";
+
+/*
+ * AI Harness — Design Tokens
+ * Dark, dense, professional AI development environment.
+ * 4px spacing base. Inter UI + JetBrains Mono code.
+ */
+@theme {
+  /* Surfaces — layered depth system */
+  --color-bg: #080d1a;
+  --color-surface-1: #0e1525;
+  --color-surface-2: #151d30;
+  --color-surface-3: #1c2640;
+  --color-surface-4: #243050;
+  --color-border: #1e2a42;
+  --color-border-strong: #2c3a58;
+  --color-border-focus: #5b8cff;
+
+  /* Text hierarchy */
+  --color-text-primary: #f0f4f8;
+  --color-text-secondary: #a8b4c4;
+  --color-text-muted: #6b7a8e;
+  --color-text-disabled: #4a5568;
+  --color-text-inverse: #080d1a;
+
+  /* Brand */
+  --color-brand: #5b8cff;
+  --color-brand-hover: #4a7aee;
+  --color-brand-active: #3968d6;
+  --color-brand-subtle: #5b8cff10;
+  --color-brand-muted: #5b8cff20;
+
+  /* Semantic */
+  --color-success: #34d399;
+  --color-success-subtle: #34d39915;
+  --color-warning: #fbbf24;
+  --color-warning-subtle: #fbbf2415;
+  --color-danger: #f87171;
+  --color-danger-subtle: #f8717115;
+  --color-info: #60a5fa;
+  --color-info-subtle: #60a5fa15;
+
+  /* Agent state mapping */
+  --color-state-queued: #6b7a8e;
+  --color-state-planning: #60a5fa;
+  --color-state-waiting-approval: #fbbf24;
+  --color-state-executing: #5b8cff;
+  --color-state-verifying: #a78bfa;
+  --color-state-completed: #34d399;
+  --color-state-failed: #f87171;
+  --color-state-cancelled: #6b7a8e;
+  --color-state-interrupted: #fb923c;
+
+  /* Typography */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, SFMono-Regular, monospace;
+
+  /* Radii */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,0.5);
+  --shadow-glow: 0 0 20px rgba(91,140,255,0.15);
+
+  /* Transitions */
+  --transition-fast: 120ms ease;
+  --transition-normal: 200ms ease;
+  --transition-slow: 300ms ease;
+}
+
+/* ─── Base ─────────────────────────────────────────────────── */
+html, body {
+  background-color: var(--color-bg);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 20px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ─── Focus ring ───────────────────────────────────────────── */
+*:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+}
+
+/* ─── Scrollbar styling ────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted);
+}
+
+/* ─── Selection ────────────────────────────────────────────── */
+::selection {
+  background: var(--color-brand-muted);
+  color: var(--color-text-primary);
+}
+
+/* ─── Reduced motion ───────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ─── Utility classes ──────────────────────────────────────── */
+@utility panel {
+  @apply rounded-lg border border-border bg-surface-1;
+}
+
+@utility panel-raised {
+  @apply rounded-lg border border-border-strong bg-surface-2;
+}
+
+@utility surface-hover {
+  @apply transition-colors hover:bg-surface-2 hover:border-border-strong;
+}
+
+@utility text-balance {
+  text-wrap: balance;
+}
+
+@utility scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-strong) transparent;
+}
+
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@utility text-h1 {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 28px;
+  letter-spacing: -0.025em;
+}
+
+@utility text-h2 {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 24px;
+}
+
+@utility text-h3 {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+}

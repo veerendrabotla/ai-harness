@@ -1,0 +1,19 @@
+{
+  "name": "@ai-harness/bridge-gateway",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "cross-env NODE_ENV=production tsx src/server.ts"
+  },
+  "dependencies": {
+    "@ai-harness/database": "*",
+    "@ai-harness/shared": "*",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.14",
+    "cross-env": "^7.0.3"
+  }
+}

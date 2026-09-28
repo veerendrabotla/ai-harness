@@ -1,0 +1,21 @@
+{
+  "name": "@ai-harness/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "bin": {
+    "aiharness": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ai-harness/sdk": "*"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3"
+  }
+}

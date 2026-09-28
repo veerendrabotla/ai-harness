@@ -1,0 +1,82 @@
+# ── AI Harness Worker ───────────────────────────────────────
+FROM node:22-alpine AS deps
+WORKDIR /app
+COPY package.json package-lock.json ./
+# All workspace manifests — npm must see the full workspace set so it links
+# every @ai-harness/* package into node_modules (esbuild and runtime resolve
+# through those links). Keep in sync with the workspaces globs in package.json.
+COPY backend/apps/api/package.json backend/apps/api/
+COPY backend/apps/bridge-gateway/package.json backend/apps/bridge-gateway/
+COPY backend/apps/worker/package.json backend/apps/worker/
+COPY backend/packages/agent-loop/package.json backend/packages/agent-loop/
+COPY backend/packages/agent-modes/package.json backend/packages/agent-modes/
+COPY backend/packages/agent-observability/package.json backend/packages/agent-observability/
+COPY backend/packages/agent-registry/package.json backend/packages/agent-registry/
+COPY backend/packages/agent-runtime/package.json backend/packages/agent-runtime/
+COPY backend/packages/ai-docs/package.json backend/packages/ai-docs/
+COPY backend/packages/ai-test-gen/package.json backend/packages/ai-test-gen/
+COPY backend/packages/ast-analyzer/package.json backend/packages/ast-analyzer/
+COPY backend/packages/browser-agent/package.json backend/packages/browser-agent/
+COPY backend/packages/circuit-breaker/package.json backend/packages/circuit-breaker/
+COPY backend/packages/cli/package.json backend/packages/cli/
+COPY backend/packages/code-metrics/package.json backend/packages/code-metrics/
+COPY backend/packages/code-review/package.json backend/packages/code-review/
+COPY backend/packages/code-search/package.json backend/packages/code-search/
+COPY backend/packages/conflict-resolution/package.json backend/packages/conflict-resolution/
+COPY backend/packages/context-engine/package.json backend/packages/context-engine/
+COPY backend/packages/context-retriever/package.json backend/packages/context-retriever/
+COPY backend/packages/contracts/package.json backend/packages/contracts/
+COPY backend/packages/core/package.json backend/packages/core/
+COPY backend/packages/cost-tracker/package.json backend/packages/cost-tracker/
+COPY backend/packages/database/package.json backend/packages/database/
+COPY backend/packages/dependency-auditor/package.json backend/packages/dependency-auditor/
+COPY backend/packages/dependency-graph/package.json backend/packages/dependency-graph/
+COPY backend/packages/deployment-engine/package.json backend/packages/deployment-engine/
+COPY backend/packages/deployment-provider/package.json backend/packages/deployment-provider/
+COPY backend/packages/domain/package.json backend/packages/domain/
+COPY backend/packages/event-bus/package.json backend/packages/event-bus/
+COPY backend/packages/events/package.json backend/packages/events/
+COPY backend/packages/execution-provider/package.json backend/packages/execution-provider/
+COPY backend/packages/extension-system/package.json backend/packages/extension-system/
+COPY backend/packages/file-watcher/package.json backend/packages/file-watcher/
+COPY backend/packages/git-ops/package.json backend/packages/git-ops/
+COPY backend/packages/health-checker/package.json backend/packages/health-checker/
+COPY backend/packages/mcp-platform/package.json backend/packages/mcp-platform/
+COPY backend/packages/metrics-collector/package.json backend/packages/metrics-collector/
+COPY backend/packages/model-adapters/package.json backend/packages/model-adapters/
+COPY backend/packages/multi-agent/package.json backend/packages/multi-agent/
+COPY backend/packages/permission-engine/package.json backend/packages/permission-engine/
+COPY backend/packages/project-memory/package.json backend/packages/project-memory/
+COPY backend/packages/rate-limiter/package.json backend/packages/rate-limiter/
+COPY backend/packages/refactor-assist/package.json backend/packages/refactor-assist/
+COPY backend/packages/repo-intelligence/package.json backend/packages/repo-intelligence/
+COPY backend/packages/sandbox-engine/package.json backend/packages/sandbox-engine/
+COPY backend/packages/sdk/package.json backend/packages/sdk/
+COPY backend/packages/security-scanner/package.json backend/packages/security-scanner/
+COPY backend/packages/self-recovery/package.json backend/packages/self-recovery/
+COPY backend/packages/session-engine/package.json backend/packages/session-engine/
+COPY backend/packages/shared/package.json backend/packages/shared/
+COPY backend/packages/smart-lint/package.json backend/packages/smart-lint/
+COPY backend/packages/task-orchestrator/package.json backend/packages/task-orchestrator/
+COPY backend/packages/test-coverage/package.json backend/packages/test-coverage/
+COPY backend/packages/token-budget/package.json backend/packages/token-budget/
+COPY backend/packages/tool-harness/package.json backend/packages/tool-harness/
+RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund --fetch-retries=5 --fetch-retry-mintimeout=2000 --fetch-retry-maxtimeout=60000
+
+FROM node:22-alpine
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=deps /app/node_modules ./node_modules
+# npm nests some workspace deps (e.g. xstate under domain) — seed them too;
+# later COPY of the source tree merges over this without deleting them.
+COPY --from=deps /app/backend ./backend
+COPY package.json tsconfig.base.json ./
+COPY scripts/build-backend.mjs ./scripts/build-backend.mjs
+COPY backend/prisma ./backend/prisma
+COPY backend/apps/worker ./backend/apps/worker
+COPY backend/packages ./backend/packages
+
+
+RUN npx prisma generate --schema=backend/prisma/schema.prisma
+RUN node scripts/build-backend.mjs worker
+CMD ["node", "dist/worker/index.js"]

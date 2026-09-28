@@ -1,0 +1,44 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# builds
+.next/
+out/
+dist/
+build/
+release/
+release2/
+*.tsbuildinfo
+
+# env & secrets
+.env
+.env.local
+.env.*.local
+*.pem
+
+# databases
+*.db
+*.sqlite
+
+# logs
+logs/
+*.log
+npm-debug.log*
+
+# testing
+coverage/
+playwright-report/
+test-results/
+
+# misc
+.DS_Store
+Thumbs.db
+.vercel
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# generated prisma client
+backend/node_modules/.prisma/

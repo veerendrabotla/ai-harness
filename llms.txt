@@ -1,0 +1,51 @@
+# AI Harness
+
+> AI Harness is a model-independent agentic development environment: a control plane where AI coding agents understand projects, assemble bounded context, draft structured plans, request human approval, execute policy-controlled tools, verify their work, and leave a complete auditable trail. Fastify 5 API + BullMQ worker + Next.js 15 PWA + Bridge Gateway, Postgres 17 / Redis 7, npm-workspaces monorepo.
+
+## Documentation
+
+- [Getting Started](docs/getting-started.md): Install, run, and complete your first agent task in 30 minutes
+- [Core Concepts](docs/concepts.md): Tasks, runs, the state machine, permissions, checkpoints, context budgets, model routing, events
+- [Troubleshooting](docs/troubleshooting.md): Symptom → cause → fix diagnostics hub (install, database, API, worker, bridge, provider issues)
+- [Examples](docs/examples/README.md): Eight worked recipes — bug fixes, plan approval, refactor with rollback, test loops, Ollama, MCP, checkpoints
+
+## Guides
+
+- [Permissions & Approvals](docs/guides/permissions-and-approvals.md): ALLOW/ASK/DENY pipeline, policies, expiring approvals, destructive-tool checkpoints, security scan gate
+- [Context & Memory](docs/guides/context-and-memory.md): Budgeted context assembly, priority tiers, repo map, compaction, prompt-injection defenses, project memory
+- [Models & Providers](docs/guides/models-and-providers.md): Encrypted provider credentials, supported adapters, stage-based model routing, fallbacks, cost and quota enforcement
+- [Hooks & Events](docs/guides/hooks-and-events.md): Persist-first ordered events, afterSequence replay, lifecycle hooks, Prometheus metrics
+- [MCP](docs/guides/mcp.md): Connect HTTP/SSE/STDIO Model Context Protocol servers, tool discovery, health checks, security gating
+- [Self-Hosting](docs/guides/self-hosting.md): Single-node quickstart, production containers, env var reference, scaling, Terraform GCP stack
+
+## Reference
+
+- [API Reference](docs/API.md): REST endpoints, JSON envelopes, error codes, WebSocket events
+- [Agent Runtime](docs/AGENT_RUNTIME.md): Runtime architecture, state machine, planning protocol, execution loop, tool registry, event system
+- [Backend Structure](docs/BACKEND_STRUCTURE.md): Per-package layout and full database schema
+- [CLI Guide](CLI_GUIDE.md): CLI commands, flags, and JSON output
+- [SDK Guide](SDK_GUIDE.md): SDK client usage and recipes
+- [Extension Guide](EXTENSION_GUIDE.md): Extension/plugin lifecycle and manifests
+- [Tool Guide](TOOL_GUIDE.md): Tool registry, risk levels, execution environments
+- [Architecture](ARCHITECTURE.md): High-level system tree, component responsibilities, guarantees
+
+## Product & process
+
+- [PRD](docs/PRD.md): Personas, product principles, problem statement
+- [App Flow](docs/APP_FLOW.md): Task lifecycle and frontend/backend flows
+- [Tech Stack](docs/TECH_STACK.md): Versions and technology choices
+- [Frontend Guidelines](docs/FRONTEND_GUIDELINES.md): Design tokens and UI conventions
+- [Security](SECURITY.md): Security posture, controls, and threat mitigations
+- [Agent Guide](AGENT_GUIDE.md): Five-agent architecture and task lifecycle
+- [Platform Guide](PLATFORM_GUIDE.md): Deployment surfaces
+- [Contributing](CONTRIBUTING.md): Development process rules
+- [Changelog](CHANGELOG.md): Release history
+
+## Deep dives & status
+
+- [Implementation Status](IMPLEMENTATION_STATUS.md): Honest per-subsystem status
+- [Roadmap](TODO_NEXT_PHASE.md): Phased roadmap and execution log (append-only)
+- [Decisions](DECISIONS.md): Spec-conflict resolutions and rationale
+- [Architecture Audit](ARCHITECTURE_AUDIT.md): Mechanism-by-mechanism audit verdicts
+- [Gap Audit](FINAL_GAP_AUDIT.md): Final gap checklist
+- [External Deployment Checklist](EXTERNAL_DEPLOYMENT_CHECKLIST.md): Cloud environment, secrets, run commands

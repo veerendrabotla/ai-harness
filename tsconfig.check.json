@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": [
+    "backend/apps/api/src/**/*.ts",
+    "backend/apps/bridge-gateway/src/**/*.ts",
+    "backend/apps/worker/src/**/*.ts",
+    "backend/apps/worker/src/**/*.ts",
+    "backend/packages/*/src/**/*.ts",
+    "vitest.config.ts",
+    "eslint.config.mjs"
+  ],
+  "exclude": ["**/node_modules", "**/dist"]
+}

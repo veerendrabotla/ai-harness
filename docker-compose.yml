@@ -1,0 +1,153 @@
+services:
+  postgres:
+    image: postgres:17.4
+    container_name: ai-harness-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ai_harness}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ai_harness}
+      POSTGRES_DB: ${POSTGRES_DB:-ai_harness}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./scripts/init-shadow-db.sql:/docker-entrypoint-initdb.d/10-init-shadow-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ai_harness -d ai_harness"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7.4
+    container_name: ai-harness-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-ai_harness_redis}"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "ai_harness_redis", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # One-shot migration runner — exits after applying pending Prisma migrations
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: ai-harness-migrate
+    restart: "no"
+    command: ["node", "scripts/migrate.mjs"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ai_harness}:${POSTGRES_PASSWORD:-ai_harness}@postgres:5432/${POSTGRES_DB:-ai_harness}?connection_limit=5&pool_timeout=10
+      SHADOW_DATABASE_URL: postgresql://${POSTGRES_USER:-ai_harness}:${POSTGRES_PASSWORD:-ai_harness}@postgres:5432/${POSTGRES_DB:-ai_harness}_shadow?connection_limit=5&pool_timeout=10
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: ai-harness-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      # NEXT_PUBLIC_API_URL is injected at RUNTIME via /env.js (see frontend/public/env.js)
+      # Build-time fallback for local dev only — never rely on host resolution of "api"
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
+    depends_on:
+      api:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: ai-harness-api
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    # Secrets (JWT_ACCESS_SECRET, ENCRYPTION_KEY, BRIDGE_INTERNAL_TOKEN, ...) come
+    # from the local .env created by `node scripts/setup-env.mjs`. Values listed
+    # under `environment:` below take precedence over env_file entries.
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ai_harness}:${POSTGRES_PASSWORD:-ai_harness}@postgres:5432/${POSTGRES_DB:-ai_harness}?connection_limit=10&pool_timeout=10
+      REDIS_URL: redis://:${REDIS_PASSWORD:-ai_harness_redis}@redis:6379
+      NODE_ENV: production
+      SANDBOX_MODE: ${SANDBOX_MODE:-docker}
+      # Inside the compose network the gateway is reached by service name,
+      # not localhost (which .env uses for host-mode development).
+      BRIDGE_GATEWAY_URL: http://gateway:4010
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4000/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: ai-harness-worker
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ai_harness}:${POSTGRES_PASSWORD:-ai_harness}@postgres:5432/${POSTGRES_DB:-ai_harness}?connection_limit=10&pool_timeout=10
+      REDIS_URL: redis://:${REDIS_PASSWORD:-ai_harness_redis}@redis:6379
+      NODE_ENV: production
+      SANDBOX_MODE: ${SANDBOX_MODE:-docker}
+      BRIDGE_GATEWAY_URL: http://gateway:4010
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile.gateway
+    container_name: ai-harness-gateway
+    restart: unless-stopped
+    ports:
+      - "4010:4010"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ai_harness}:${POSTGRES_PASSWORD:-ai_harness}@postgres:5432/${POSTGRES_DB:-ai_harness}?connection_limit=5&pool_timeout=10
+      REDIS_URL: redis://:${REDIS_PASSWORD:-ai_harness_redis}@redis:6379
+      API_URL: http://api:4000
+      NODE_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_started
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  postgres-data:
+  redis-data:

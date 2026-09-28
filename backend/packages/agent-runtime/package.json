@@ -1,0 +1,26 @@
+{
+  "name": "@ai-harness/agent-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "dependencies": {
+    "@ai-harness/code-search": "*",
+    "@ai-harness/context-engine": "*",
+    "@ai-harness/contracts": "*",
+    "@ai-harness/database": "*",
+    "@ai-harness/domain": "*",
+    "@ai-harness/extension-system": "*",
+    "@ai-harness/file-watcher": "*",
+    "@ai-harness/mcp-platform": "*",
+    "@ai-harness/model-adapters": "*",
+    "@ai-harness/multi-agent": "*",
+    "@ai-harness/permission-engine": "*",
+    "@ai-harness/project-memory": "*",
+    "@ai-harness/repo-intelligence": "*",
+    "@ai-harness/self-recovery": "*",
+    "@ai-harness/shared": "*",
+    "@ai-harness/tool-harness": "*"
+  }
+}

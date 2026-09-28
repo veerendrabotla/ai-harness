@@ -1,0 +1,23 @@
+# ── AI Harness Frontend (Next.js standalone) ──────────────────
+FROM node:22-alpine AS build
+WORKDIR /app
+COPY package.json package-lock.json ./
+COPY frontend/package.json frontend/
+COPY backend/packages/contracts/package.json backend/packages/contracts/
+RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund --fetch-retries=5 --fetch-retry-mintimeout=2000 --fetch-retry-maxtimeout=60000
+COPY . .
+ARG NEXT_PUBLIC_API_URL=http://localhost:4000
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_OUTPUT_STANDALONE=1
+RUN npm run build -w frontend
+
+FROM node:22-alpine
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=build /app/frontend/.next/standalone ./
+COPY --from=build /app/frontend/.next/static ./frontend/.next/static
+COPY --from=build /app/frontend/public ./frontend/public
+RUN printf '#!/bin/sh\nset -e\nAPI="${API_URL:-${NEXT_PUBLIC_API_URL:-http://localhost:4000}}"\nmkdir -p /app/frontend/public\nprintf "window.__ENV__={API_URL:%%s};" "$(printf "%%s" "$API" | sed "s/\"/\\\\\"/g; s/^/\"/; s/$/\"/")" > /app/frontend/public/env.js\necho "[env] wrote /frontend/public/env.js (API_URL=$API)"\nexec "$@"\n' > /app/docker-entrypoint.sh && chmod +x /app/docker-entrypoint.sh
+EXPOSE 3000
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
+CMD ["node", "frontend/server.js"]

@@ -1,0 +1,65 @@
+{
+  "name": "ai-harness",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI Harness — model-independent agentic development environment (control plane, agent runtime, tool harness)",
+  "license": "UNLICENSED",
+  "type": "module",
+  "engines": {
+    "node": ">=22.14.0"
+  },
+  "workspaces": [
+    "frontend",
+    "backend/apps/*",
+    "backend/packages/*",
+    "desktop"
+  ],
+  "scripts": {
+    "infra:up": "docker compose up -d",
+    "infra:down": "docker compose down",
+    "db:migrate": "npm -w @ai-harness/database run migrate",
+    "db:generate": "npm -w @ai-harness/database run generate",
+    "db:studio": "npm -w @ai-harness/database run studio",
+    "dev:api": "npm -w @ai-harness/api run dev",
+    "dev:worker": "npm -w @ai-harness/worker run dev",
+    "dev:frontend": "npm -w frontend run dev",
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "tsc -p tsconfig.check.json",
+    "lint": "eslint .",
+    "lint:frontend": "npm -w frontend run lint",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "e2e:agent": "tsx scripts/e2e-agent-run.ts",
+    "e2e:bridge": "tsx scripts/e2e-bridge-run.ts",
+    "e2e:smoke": "tsx scripts/smoke-vertical-slice.ts",
+    "e2e:resilience": "tsx scripts/e2e-two-workers.ts",
+    "e2e:replicas": "tsx scripts/e2e-two-replica-socket.ts",
+    "bench:replay": "tsx scripts/bench-replay.ts",
+    "e2e:browser": "npm run build -w frontend && npx playwright test --config frontend/playwright.config.ts",
+    "desktop:dev": "npm run dev -w desktop",
+    "desktop:build": "npm run build -w desktop",
+    "desktop:build:win": "npm run build:win -w desktop",
+    "desktop:build:mac": "npm run build:mac -w desktop",
+    "desktop:build:linux": "npm run build:linux -w desktop",
+    "build:backend": "node scripts/build-backend.mjs",
+    "start:api": "node dist/api/index.js",
+    "start:worker": "node dist/worker/index.js",
+    "start:gateway": "node dist/gateway/index.js",
+    "loadtest": "npx artillery run loadtest.yml"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "@typescript-eslint/eslint-plugin": "^8.26.1",
+    "@typescript-eslint/parser": "^8.26.1",
+    "esbuild": "^0.28.2",
+    "eslint": "^9.22.0",
+    "prettier": "^3.5.3",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.26.1",
+    "vitest": "^3.1.1"
+  },
+  "overrides": {
+    "typescript": "^5.8.3"
+  }
+}

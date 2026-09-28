@@ -1,0 +1,16 @@
+{
+  "name": "local-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "bridge": "tsx src/agent.ts run"
+  },
+  "dependencies": {
+    "@ai-harness/shared": "*",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.14"
+  }
+}
