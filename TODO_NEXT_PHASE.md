@@ -297,3 +297,12 @@ External-only (not in the 20): GCP/terraform apply, Resend key, Sentry/PostHog -
 - [ ] 6 bounds  - [ ] 7 sweeper  - [ ] 8 reviewer  - [ ] 9 adapters  - [ ] 10 email  - [ ] 11 sandbox
 - [ ] 12 bridge-proxy  - [ ] 13 load  - [ ] 14 hygiene
 - [ ] 15 prompt  - [ ] 16 pricing+bench  - [ ] 17 rules+cases  - [ ] 18 enterprise  - [ ] 19 guides  - [ ] 20 release
+
+### PHASE 13 execution log (tasks 1-2)
+
+- [x] 1 git — branch `master`->`main`, `.gitignore` verified (`.env`/`node_modules`/`dist`/`.next` all ignored), initial commit `a2e0024` (742 files, 0 left out). LF/CRLF: repo stores LF (autocrlf normalizes) — Docker-safe.
+- [x] 2 audit — `npm audit --omit=dev` **11 -> 4** (critical `next` CVE batch cleared 15.2.4 -> **15.5.26**; `glob` 10.4.5 -> 10.5.0; `hono` -> 4.13.9; js-yaml/gaxios/qs fixed; `@playwright/test` 1.51.1 -> 1.63.0; `@serwist/*` 9.0.11 -> 9.4.1 which drops the exact-pinned vulnerable `browserslist@4.28.6` — 9.5.12 pinned it, npm root `overrides` do NOT reach workspace deps (npm bug), verified via `npm explain`). Full audit 28 -> 20.
+  - **Accepted residuals (documented, non-exploitable in our usage)**: `postcss@8.4.31` nested exact-pin inside `next` (build-time processing of trusted project CSS only; clears via `next@16` upgrade — tracked); `uuid@9` in `@google/genai` chain (CVE needs attacker-controlled v3/v5/v6 buffer; gaxios calls `v4()` no-arg; uuid 11 is ESM-only -> would break CJS `require`). Dev-only residue: electron/electron-builder chain (ASAR integrity, node-tar critical via cacache/node-gyp), vitest mocker — dev tooling, not shipped.
+  - Fallout fixed: `next build` regenerated `next-env.d.ts` with a `path` triple-slash -> `frontend/eslint.config.mjs` now ignores `next-env.d.ts` (generated file).
+  - Verification: `npm run build` (all workspaces incl. **desktop electron NSIS+portable — asar lock gone**) EXIT 0; lint 0; typecheck 0; FE tsc 0; FE lint 0 err (2 known warn); `RUN_INTEGRATION=1 npm test` **525/525** (first rerun had 4 live-server files hook-timeout — transient fresh-install I/O storm; isolated rerun green, full rerun green 53/53 + 525/525).
+- [ ] 3 e2e battery  - [ ] 4 CI docker  - [ ] 5 terraform  - [ ] 6-20 pending
