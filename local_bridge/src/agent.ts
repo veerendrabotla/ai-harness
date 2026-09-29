@@ -20,7 +20,7 @@ import { homedir, hostname } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { WebSocket } from "ws";
 import { createHash } from "node:crypto";
-import { confinePath, isSafeOutboundUrl, sha256Hex, type CheckpointStateReference } from "@ai-harness/shared";
+import { confinePath, isLoopbackUrl, sha256Hex, type CheckpointStateReference } from "@ai-harness/shared";
 
 const API_URL = process.env.AI_HARNESS_API_URL ?? "http://localhost:4000";
 const GATEWAY_URL = process.env.AI_HARNESS_GATEWAY_URL ?? "ws://localhost:4010/bridge";
@@ -557,10 +557,12 @@ async function handle(kind: string, params: Record<string, unknown>): Promise<Re
     case "http.proxy": {
       const url = String(params["url"] ?? "");
       if (!url) throw Object.assign(new Error("missing url"), { code: "VALIDATION_ERROR" });
-      // SSRF allowlist enforcement — block private/internal destinations
-      const ssrfGuard = isSafeOutboundUrl(url);
+      // Preview proxy policy: destinations are preview dev servers bound to
+      // loopback on this machine. Non-loopback targets are denied outright —
+      // this path must never be usable as a general fetcher / internal scanner.
+      const ssrfGuard = isLoopbackUrl(url);
       if (!ssrfGuard.allowed) {
-        throw Object.assign(new Error(ssrfGuard.reason ?? "requests to private/internal addresses are denied by policy"), { code: "POLICY_DENIED" });
+        throw Object.assign(new Error(ssrfGuard.reason ?? "destination denied by policy"), { code: "POLICY_DENIED" });
       }
       const method = String(params["method"] ?? "GET");
       const headers = (params["headers"] as Record<string, string> | undefined) ?? {};
@@ -571,23 +573,27 @@ async function handle(kind: string, params: Record<string, unknown>): Promise<Re
       } catch {
         throw Object.assign(new Error("invalid url"), { code: "VALIDATION_ERROR" });
       }
-      if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
-        throw Object.assign(new Error("only http/https allowed"), { code: "VALIDATION_ERROR" });
-      }
       // Fetch through the bridge host — allows remote preview when browser is not on bridge machine.
       const fetchOpts: RequestInit = { method, headers };
       if (reqBody && method !== "GET" && method !== "HEAD") fetchOpts.body = reqBody;
       const resp = await fetch(url, fetchOpts);
-      const text = await resp.text();
+      const contentType = resp.headers.get("content-type") ?? "";
       const respHeaders: Record<string, string> = {};
       resp.headers.forEach((v, k) => { respHeaders[k] = v; });
-      return {
-        status: resp.status,
-        statusText: resp.statusText,
-        headers: respHeaders,
-        body: text.slice(0, 1_000_000),
-        ok: resp.ok,
-      };
+      const base = { status: resp.status, statusText: resp.statusText, headers: respHeaders, ok: resp.ok };
+      // Text-ish bodies go over the wire as text; binary (images/fonts/wasm)
+      // must be base64 or resp.text() corrupts it through UTF-8.
+      const isTextish = !contentType
+        || /^(text\/|application\/(json|xml|javascript|x-ndjson|manifest\+json)|image\/svg)/i.test(contentType)
+        || /\+(json|xml)\b|charset=/i.test(contentType);
+      if (isTextish) {
+        const text = await resp.text();
+        return { ...base, body: text.slice(0, 1_000_000), bodyEncoding: "text" };
+      }
+      const buf = Buffer.from(await resp.arrayBuffer());
+      // Keep under the gateway's 1MB WS frame budget after base64 expansion.
+      const capped = buf.subarray(0, 700_000);
+      return { ...base, body: capped.toString("base64"), bodyEncoding: "base64", truncated: buf.length > capped.length };
     }
     case "ckpt.rollback": {
       // Rollback may target any configured root passed by the harness.

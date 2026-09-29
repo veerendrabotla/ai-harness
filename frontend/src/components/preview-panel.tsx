@@ -21,7 +21,7 @@ import {
   WifiOff,
   Clock,
 } from "lucide-react";
-import { apiFetch } from "@/lib/api-client";
+import { apiFetch, apiUrl } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
@@ -132,9 +132,9 @@ export function PreviewPanel({ projectId, taskState, onInspectElement, refreshTr
   const isStarting = preview.data?.status === "starting";
 
   // Remote vs local detection: preview URL is always http://localhost:<port> on the bridge host.
-  // When the browser is on a different machine, a direct fetch/iframe to localhost will fail.
-  // TODO(bridge-proxy): wire iframe src through POST /bridge/proxy (gateway) -> "http.fetch" on the bridge
-  // so remote browsers can render the preview without assuming localhost reachability. For now we surface a hint.
+  // When the browser is on a different machine, a direct fetch/iframe to localhost will fail —
+  // remote previews are served through the bridge proxy (GET .../preview/proxy/* with a
+  // short-lived ticket; see projects.preview-proxy.ts).
   const isRemotePreview = (() => {
     if (typeof window === "undefined" || !preview.data?.url) return false;
     const url = preview.data.url;
@@ -144,6 +144,24 @@ export function PreviewPanel({ projectId, taskState, onInspectElement, refreshTr
     return host !== "localhost" && host !== "127.0.0.1" && host !== "";
   })();
 
+  // Proxy ticket (project-bound, ~2h TTL) — iframes cannot send Authorization headers.
+  const proxyTicket = useQuery({
+    queryKey: ["preview-proxy-ticket", projectId],
+    queryFn: () =>
+      apiFetch<{ ticket: string; expiresAt: string }>(`/v1/projects/${projectId}/preview/proxy-ticket`, {
+        method: "POST",
+      }),
+    enabled: Boolean(projectId) && isRemotePreview && isActive,
+    staleTime: 60 * 60_000, // refresh hourly — well inside the 2h ticket TTL
+    retry: 1,
+  });
+
+  const proxiedPreviewUrl =
+    isRemotePreview && proxyTicket.data
+      ? `${apiUrl}/v1/projects/${projectId}/preview/proxy/?ticket=${encodeURIComponent(proxyTicket.data.ticket)}`
+      : null;
+  const iframeSrc = proxiedPreviewUrl ?? preview.data?.url ?? "";
+
   // Auto-refresh preview when file changes are detected
   useEffect(() => {
     if (refreshTrigger && refreshTrigger > 0 && isActive) {
@@ -151,14 +169,14 @@ export function PreviewPanel({ projectId, taskState, onInspectElement, refreshTr
     }
   }, [refreshTrigger, isActive]);
 
-  // Health check
+  // Health check (remote browsers probe through the proxy; local directly)
   const health = useQuery({
-    queryKey: ["preview-health", projectId],
-    enabled: Boolean(projectId) && Boolean(preview.data?.url),
+    queryKey: ["preview-health", projectId, proxiedPreviewUrl],
+    enabled: Boolean(projectId) && Boolean(preview.data?.url) && (!isRemotePreview || Boolean(proxiedPreviewUrl)),
     queryFn: async () => {
       const start = Date.now();
       try {
-        const res = await fetch(preview.data!.url!, { method: "HEAD", mode: "no-cors" });
+        const res = await fetch(proxiedPreviewUrl ?? preview.data!.url!, { method: "HEAD", mode: "no-cors" });
         return {
           reachable: true,
           statusCode: res.status,
@@ -651,9 +669,9 @@ export function PreviewPanel({ projectId, taskState, onInspectElement, refreshTr
               <div className="px-2 py-1.5 bg-warning/10 border-b border-warning/20 flex items-center gap-1.5 text-[11px] text-warning shrink-0">
                 <AlertCircle className="h-3 w-3 shrink-0" />
                 <span>
-                  Preview is on <code className="font-mono">{preview.data.url}</code> (bridge host). Direct localhost access fails when the browser is remote.
-                  {/* TODO(bridge-proxy): replace iframe src with proxied URL via POST /bridge/proxy -> http.fetch on the bridge (gateway forwards through WebSocket). */}
-                  Use the bridge HTTP proxy (<code className="font-mono">POST /bridge/proxy</code>) to fetch preview HTML through the bridge.
+                  {proxyTicket.data
+                    ? <>Serving <code className="font-mono">{preview.data.url}</code> through the Local Bridge proxy (this browser cannot reach localhost on the bridge host directly).</>
+                    : "Connecting through the Local Bridge proxy…"}
                 </span>
               </div>
             )}
@@ -661,7 +679,7 @@ export function PreviewPanel({ projectId, taskState, onInspectElement, refreshTr
             {/* iframe */}
             <div className="flex justify-center flex-1 overflow-auto">
               <div style={{ width: VIEWPORT_WIDTHS[viewport], maxWidth: "100%" }} className="h-full transition-all duration-300">
-                <iframe ref={iframeRef} key={iframeKey} src={preview.data.url} className="w-full h-full border-0" title="Preview" sandbox="allow-scripts allow-same-origin allow-forms allow-popups" />
+                <iframe ref={iframeRef} key={iframeKey} src={iframeSrc} className="w-full h-full border-0" title="Preview" sandbox="allow-scripts allow-same-origin allow-forms allow-popups" />
               </div>
             </div>
           </div>

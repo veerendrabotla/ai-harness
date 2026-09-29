@@ -295,7 +295,7 @@ External-only (not in the 20): GCP/terraform apply, Resend key, Sentry/PostHog -
 ### Execution log
 - [x] 1 git  - [x] 2 audit  - [x] 3 e2e battery  - [x] 4 CI docker  - [x] 5 terraform
 - [x] 6 bounds  - [x] 7 sweeper  - [x] 8 reviewer  - [x] 9 adapters  - [x] 10 email  - [x] 11 sandbox
-- [ ] 12 bridge-proxy  - [ ] 13 load  - [ ] 14 hygiene
+- [x] 12 bridge-proxy  - [ ] 13 load  - [ ] 14 hygiene
 - [ ] 15 prompt  - [ ] 16 pricing+bench  - [ ] 17 rules+cases  - [ ] 18 enterprise  - [ ] 19 guides  - [ ] 20 release
 
 ### PHASE 13 execution log (tasks 1-2)
@@ -366,6 +366,21 @@ External-only (not in the 20): GCP/terraform apply, Resend key, Sentry/PostHog -
   - **ESM logger bug**: `auth-service.ts` `getLogger()` used a bare `require("pino")` → `require is not defined` under ESM (tsx, `type:module`) → silently degraded to a no-op logger, losing the dev token log AND resend failure logs → now `createRequire(import.meta.url)` (verified working: token captured on first run).
   - `.env` `RATE_LIMIT_RESET_PER_HOUR=500` (was commented out → zod default 5/IP/hour would throttle repeated runs; matches the signup/login overrides).
 - Gates: `typecheck` 0 · `lint` 0 · `RUN_INTEGRATION=1 npm test` **EXIT 0 — 57 passed/1 skipped files, 533 passed/22 skipped tests** (first attempt had 3 contention flakes — load.test.ts 56% success, docker-isolation path-traversal, acceptance hook timeout — all 31/31 green in isolated rerun; full rerun green). Note: docker-isolation conditional skips fluctuate (22-26) between runs.
+
+
+
+### PHASE 13 execution log (task 12) — bridge proxy for preview panel
+
+- [x] 12 bridge proxy — last two code TODOs (`preview-panel.tsx:136,655`) removed; remote previews now stream through the Local Bridge instead of expecting the browser to reach the bridge host's localhost.
+  - **Security model**: new shared `isLoopbackUrl()` (only `http(s)` → `localhost`/`127.x.x.x`/`::1`) enforced twice — gateway `POST /bridge/proxy` (service) and bridge `http.proxy` case (end of the tunnel, before any socket opens). The old `isSafeOutboundUrl` (blocks ALL private IPs) made previews unusable, so previews get the narrower loopback-only guard while general exec keeps the strict one. SSRF surface: arbitrary sites are **not** reachable through the proxy — only the instance's own preview origin.
+  - **Gateway**: `POST /bridge/proxy` (bridge-token auth, correlates over WS like `/execute`); dedicated `makeRateLimiter(300)`/min for proxy vs `30`/min for exec; per-bridge WS message cap 60→300/min (≈2 msgs per proxied subresource).
+  - **Bridge `http.proxy`**: binary-safe bodies — text-ish content-types ≤1MB forwarded as text (`bodyEncoding:"text"`), anything else base64 ≤700KB (fits the 1MB WS frame) with a `truncated` flag; loopback guard via `isLoopbackUrl`.
+  - **API** (new `projects.preview-proxy.ts` + routes in `projects.preview.ts`): `POST /v1/projects/:projectId/preview/proxy-ticket` (auth + VIEWER + preview running) → stateless HMAC ticket `v1.<b64url(projectId)>.<exp>.<sig>` (JWT_ACCESS_SECRET + `safeEqual`, 2h TTL, binds project); `GET /preview/proxy` + `/preview/proxy/*` → ticket verify (constant-time, expiry, project match), target reconstructed from `req.url` after stripping the prefix + ticket param, origin must equal the instance's, `BridgeGatewayClient.proxy()` 15s timeout, `errors.bridgeDisconnected()` on failure; response: only safe headers forwarded (**no Set-Cookie/ETag**), `cache-control: no-store`, HTML/CSS rewritten with the ticket re-appended.
+  - **Subresource rewriting**: `rewritePreviewHtml` — href/src/action/poster + `data-*` attrs, `srcset` (mixed internal/external entries kept), `<style>` blocks + `style` attributes via `url()`, `<base>` tags dropped, `<script>` content untouched; skips `data:`/`javascript:`/`#`/external origins. `rewritePreviewCss` — `url()`/`@import` rewritten unless absolute-external/data/hash.
+  - **Frontend** (`preview-panel.tsx`): `apiUrl` imported; proxy-ticket query (`enabled` only for remote+active previews, `staleTime:1h`, retry 1); `iframeSrc = proxiedPreviewUrl ?? preview.data.url`; health check probes the proxied URL when remote; banner now says "Serving … through the Local Bridge proxy" / "Connecting…".
+  - **Tests**: new `backend/apps/api/tests/preview-proxy.test.ts` **14/14** — ticket round-trip/expiry/project-binding/tamper; `toProxyUrl` absolute/relative/query/external/skip; HTML attr+srcset+style+`<base>` rewrite; CSS `url()` rewrite.
+  - **Known limitations (service-worker path deferred by design)**: absolute-path `fetch()`/XHR generated at runtime inside the iframe is not rewritten (would resolve against the API host); Set-Cookie/ETag deliberately not forwarded; ETags bust the rewrite cache anyway.
+  - Gates: `typecheck` 0 · `lint` 0 · FE `tsc` 0 · FE `lint` 0 err (2 known warn; fixed unescaped `'` from the new banner) · `RUN_INTEGRATION=1 npm test`: 54/59 files green in parallel + **5 contention flakes** (acceptance/sso/webcontainer `beforeAll` 15s hook timeouts, load 64% success, docker path-traversal timeout) → **all 49/49 green in isolated reruns** (4+11+7+5+22).
 
 
 

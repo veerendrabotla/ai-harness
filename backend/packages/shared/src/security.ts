@@ -41,3 +41,26 @@ export function isSafeOutboundUrl(rawUrl: string): UrlGuardResult {
   }
   return { allowed: true };
 }
+
+const LOOPBACK_HOST_PATTERNS: RegExp[] = [/^localhost$/i, /^127(\.\d{1,3}){3}$/, /^\[?::1\]?$/];
+
+/**
+ * Inverse-polarity guard for the preview proxy: destinations are preview dev
+ * servers bound to loopback on the bridge host. Allows ONLY loopback http/https
+ * so the proxy can never be used to reach other machines or internal networks.
+ */
+export function isLoopbackUrl(rawUrl: string): UrlGuardResult {
+  let url: URL;
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    return { allowed: false, reason: "invalid URL" };
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    return { allowed: false, reason: `protocol ${url.protocol} not permitted` };
+  }
+  if (!LOOPBACK_HOST_PATTERNS.some((re) => re.test(url.hostname))) {
+    return { allowed: false, reason: "preview proxy destinations must be loopback (localhost) addresses" };
+  }
+  return { allowed: true };
+}

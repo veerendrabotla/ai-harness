@@ -1,8 +1,9 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { BridgeGatewayClient, errors, getEnv } from "@ai-harness/shared";
 import { randomUUID } from "node:crypto";
 import { ok, reqParam } from "../../lib/http.js";
+import { rewritePreviewCss, rewritePreviewHtml, signProxyTicket, verifyProxyTicket } from "./projects.preview-proxy.js";
 
 const startSchema = z.object({
   command: z.string().min(1).max(2048),
@@ -259,6 +260,99 @@ export function registerPreviewRoutes(app: FastifyInstance) {
 
     return ok(reply, { logs: instance.logs.join(""), totalLines: instance.logs.length });
   });
+
+  // ── Preview HTTP proxy (remote browsers) ─────────────────────
+  // The preview dev server binds to loopback on the bridge host. Remote
+  // browsers cannot reach it directly, so every request is fetched through
+  // the bridge (`POST /bridge/proxy` → `http.proxy` kind) and HTML/CSS
+  // subresources are rewritten onto this proxy prefix. Iframe navigations
+  // cannot carry an Authorization header, so requests authenticate with a
+  // short-lived HMAC ticket minted here (project-bound, VIEWER-gated).
+
+  function findInstance(projectId: string): PreviewInstance | undefined {
+    return Array.from(instances.values()).find((i) => i.projectId === projectId);
+  }
+
+  app.post("/v1/projects/:projectId/preview/proxy-ticket", { preHandler: [app.authenticate] }, async (req, reply) => {
+    const projectId = reqParam(req, "projectId");
+    const project = await app.prisma.project.findUnique({ where: { id: projectId } });
+    if (!project) throw errors.notFound("Project");
+    await app.requireWorkspaceRole(req, project.workspaceId, "VIEWER");
+    const instance = findInstance(projectId);
+    if (!instance || instance.status !== "running" || !instance.url) {
+      throw errors.validation("Preview is not running");
+    }
+    const { ticket, expiresAt } = signProxyTicket(projectId);
+    return ok(reply, { ticket, expiresAt: new Date(expiresAt).toISOString() });
+  });
+
+  const previewProxyHandler = async (req: FastifyRequest, reply: FastifyReply): Promise<FastifyReply> => {
+    const projectId = reqParam(req, "projectId");
+    const query = (req.query ?? {}) as { ticket?: string };
+    if (!verifyProxyTicket(query.ticket ?? "", projectId)) {
+      throw errors.unauthenticated("Preview proxy ticket is missing, expired, or invalid");
+    }
+    const instance = findInstance(projectId);
+    if (!instance?.url || instance.status !== "running") throw errors.notFound("Preview");
+    const origin = new URL(instance.url).origin;
+
+    // Reconstruct the target from the raw URL: strip the proxy prefix and
+    // drop our own ticket param so preview-app query strings pass through.
+    const prefix = `/v1/projects/${projectId}/preview/proxy`;
+    const rawUrl = req.url;
+    const queryIdx = rawUrl.indexOf("?");
+    const rawPath = queryIdx === -1 ? rawUrl : rawUrl.slice(0, queryIdx);
+    if (!rawPath.startsWith(prefix)) throw errors.validation("Invalid proxy path");
+    const rest = rawPath.slice(prefix.length) || "/";
+    const targetParams = new URLSearchParams(queryIdx === -1 ? "" : rawUrl.slice(queryIdx + 1));
+    targetParams.delete("ticket");
+    const targetQuery = targetParams.toString();
+    let target: URL;
+    try {
+      target = new URL(rest + (targetQuery ? `?${targetQuery}` : ""), instance.url);
+    } catch {
+      throw errors.validation("Invalid proxy path");
+    }
+    if (target.origin !== origin) throw errors.validation("Proxy target must stay on the preview origin");
+
+    const gw = gateway(app);
+    const resp = await gw.proxy(
+      instance.bridgeId,
+      { url: target.toString(), method: "GET", headers: { accept: String(req.headers["accept"] ?? "*/*") } },
+      15_000,
+    );
+    if (!resp.ok) throw errors.bridgeDisconnected();
+    const data = resp.data as
+      | { status?: number; headers?: Record<string, string>; body?: string; bodyEncoding?: string }
+      | undefined;
+    if (!data || typeof data.status !== "number" || typeof data.body !== "string") {
+      throw errors.internal("Malformed proxy response from bridge");
+    }
+
+    const contentType = data.headers?.["content-type"] ?? "application/octet-stream";
+    const proxyBase = `/v1/projects/${projectId}/preview/proxy/`;
+    let payload: Buffer | string =
+      data.bodyEncoding === "base64" ? Buffer.from(data.body, "base64") : Buffer.from(data.body, "utf8");
+
+    reply.code(data.status).type(contentType);
+    // Forward only safe/freshness-neutral headers. ETags/cache validators from
+    // the origin would be wrong for rewritten bodies; Set-Cookie must not leak
+    // the preview app's cookies onto the API origin.
+    const cacheControl = data.headers?.["cache-control"];
+    if (cacheControl && !/text\/html|text\/css/i.test(contentType)) reply.header("cache-control", cacheControl);
+
+    if (/text\/html/i.test(contentType)) {
+      payload = rewritePreviewHtml(payload.toString("utf8"), { targetUrl: target, proxyBase, ticket: query.ticket ?? "" });
+      reply.header("cache-control", "no-store");
+    } else if (/text\/css/i.test(contentType)) {
+      payload = rewritePreviewCss(payload.toString("utf8"), { targetUrl: target, proxyBase, ticket: query.ticket ?? "" });
+      reply.header("cache-control", "no-store");
+    }
+    return reply.send(payload);
+  };
+
+  app.get("/v1/projects/:projectId/preview/proxy", previewProxyHandler);
+  app.get("/v1/projects/:projectId/preview/proxy/*", previewProxyHandler);
 
   // ── Auto-detect preview configuration from project ─────────
   app.get("/v1/projects/:projectId/preview/detect", { preHandler: [app.authenticate] }, async (req, reply) => {

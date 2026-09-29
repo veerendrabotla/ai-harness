@@ -7,6 +7,7 @@ import {
   ensureEnvLoaded,
   getEnv,
   loadEnv,
+  isLoopbackUrl,
   safeEqual,
   sha256Hex,
   type BridgeExecRequest,
@@ -77,10 +78,12 @@ async function handleHello(socket: WebSocket, raw: RawData): Promise<boolean> {
     });
     logger.info({ bridgeId: bridge.id }, "bridge disconnected");
   });
-  // Per-bridge WS throttling — max 60 messages/min (prevents exec spam DoS)
+  // Per-bridge WS throttling — max 300 messages/min (2 msgs per proxied
+  // subresource: exec + result; a preview page load is a burst of ~30 fetches).
+  // Still bounds exec spam DoS while allowing preview proxy traffic.
   let msgCount = 0;
   let windowStart = Date.now();
-  const MAX_MSG_PER_MIN = 60;
+  const MAX_MSG_PER_MIN = 300;
 
   socket.on("message", (data: RawData) => {
     // Rate check for post-auth messages
@@ -108,32 +111,36 @@ async function handleHello(socket: WebSocket, raw: RawData): Promise<boolean> {
   return true;
 }
 
-// HTTP /execute throttling — max 30 requests/min per IP (prevents API spam)
-const httpExecCounts = new Map<string, { count: number; windowStart: number }>();
-const MAX_HTTP_EXEC_PER_MIN = 30;
-
-function checkHttpExecRateLimit(ip: string): boolean {
-  const now = Date.now();
-  const entry = httpExecCounts.get(ip);
-  if (!entry || now - entry.windowStart > 60_000) {
-    httpExecCounts.set(ip, { count: 1, windowStart: now });
+// HTTP rate limiting — factory so /execute and /bridge/proxy get independent
+// buckets (a proxy page load legitimately bursts tens of requests in seconds).
+function makeRateLimiter(maxPerMin: number): (ip: string) => boolean {
+  const counts = new Map<string, { count: number; windowStart: number }>();
+  const limiter = (ip: string): boolean => {
+    const now = Date.now();
+    const entry = counts.get(ip);
+    if (!entry || now - entry.windowStart > 60_000) {
+      counts.set(ip, { count: 1, windowStart: now });
+      return true;
+    }
+    if (entry.count >= maxPerMin) return false;
+    entry.count++;
     return true;
-  }
-  if (entry.count >= MAX_HTTP_EXEC_PER_MIN) return false;
-  entry.count++;
-  return true;
+  };
+  setInterval(() => {
+    const now = Date.now();
+    for (const [k, v] of counts) {
+      if (now - v.windowStart > 120_000) counts.delete(k);
+    }
+  }, 60_000).unref();
+  return limiter;
 }
-// Periodic cleanup
-setInterval(() => {
-  const now = Date.now();
-  for (const [k, v] of httpExecCounts) {
-    if (now - v.windowStart > 120_000) httpExecCounts.delete(k);
-  }
-}, 60_000).unref();
+
+const checkExecRateLimit = makeRateLimiter(30);
+const checkProxyRateLimit = makeRateLimiter(300);
 
 async function handleExecute(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const clientIp = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ?? req.socket.remoteAddress ?? "unknown";
-  if (!checkHttpExecRateLimit(clientIp)) {
+  if (!checkExecRateLimit(clientIp)) {
     res.writeHead(429).end(JSON.stringify({ error: "rate_limited", message: "Too many execute requests, slow down" }));
     return;
   }
@@ -210,7 +217,7 @@ async function handleExecute(req: IncomingMessage, res: ServerResponse): Promise
  */
 async function handleProxy(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const clientIp = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ?? req.socket.remoteAddress ?? "unknown";
-  if (!checkHttpExecRateLimit(clientIp)) {
+  if (!checkProxyRateLimit(clientIp)) {
     res.writeHead(429).end(JSON.stringify({ error: "rate_limited", message: "Too many proxy requests, slow down" }));
     return;
   }
@@ -250,16 +257,11 @@ async function handleProxy(req: IncomingMessage, res: ServerResponse): Promise<v
         res.writeHead(400).end(JSON.stringify({ ok: false, error: { code: "BAD_REQUEST", message: "bridgeId and url required" } }));
         return;
       }
-      let urlObj: URL;
-      try {
-        urlObj = new URL(url);
-      } catch {
-        res.writeHead(400).end(JSON.stringify({ ok: false, error: { code: "BAD_REQUEST", message: "invalid url" } }));
-        return;
-      }
-      // Only allow http/https to localhost/private hosts via proxy (prevents SSRF to internal infra).
-      if (urlObj.protocol !== "http:" && urlObj.protocol !== "https:") {
-        res.writeHead(400).end(JSON.stringify({ ok: false, error: { code: "BAD_REQUEST", message: "only http/https allowed" } }));
+      // Only loopback http/https destinations: previews live on the bridge
+      // host's loopback; anything else is SSRF into other machines/networks.
+      const guard = isLoopbackUrl(url);
+      if (!guard.allowed) {
+        res.writeHead(400).end(JSON.stringify({ ok: false, error: { code: "BAD_REQUEST", message: guard.reason ?? "invalid url" } }));
         return;
       }
       const socket = sockets.get(bridgeId);

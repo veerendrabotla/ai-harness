@@ -19,16 +19,37 @@ export class BridgeGatewayClient {
     params: Record<string, unknown>,
     timeoutMs: number,
   ): Promise<{ ok: boolean; data?: Record<string, unknown>; error?: { code: string; message: string } }> {
+    return this.post("/execute", { bridgeId, request: { id: randomUUID(), kind, params, timeoutMs } }, timeoutMs);
+  }
+
+  /**
+   * Preview HTTP proxy — forwards a single HTTP fetch through the named
+   * bridge (`http.proxy` kind). Destination must be loopback on the bridge
+   * host (enforced by both gateway and bridge).
+   */
+  async proxy(
+    bridgeId: string,
+    request: { url: string; method?: string; headers?: Record<string, string>; body?: string },
+    timeoutMs: number,
+  ): Promise<{ ok: boolean; data?: Record<string, unknown>; error?: { code: string; message: string } }> {
+    return this.post("/bridge/proxy", { bridgeId, request: { ...request, method: request.method ?? "GET" } }, timeoutMs);
+  }
+
+  private async post(
+    path: string,
+    payload: Record<string, unknown>,
+    timeoutMs: number,
+  ): Promise<{ ok: boolean; data?: Record<string, unknown>; error?: { code: string; message: string } }> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs + 5_000);
     try {
-      const res = await fetch(`${this.options.baseUrl}/execute`, {
+      const res = await fetch(`${this.options.baseUrl}${path}`, {
         method: "POST",
         headers: {
           "content-type": "application/json",
           "x-internal-token": this.options.internalToken,
         },
-        body: JSON.stringify({ bridgeId, request: { id: randomUUID(), kind, params, timeoutMs } }),
+        body: JSON.stringify(payload),
         signal: controller.signal,
       });
       if (res.status === 503) {
