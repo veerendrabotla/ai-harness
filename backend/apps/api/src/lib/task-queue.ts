@@ -112,3 +112,28 @@ export async function closeQueue(): Promise<void> {
     queue = null;
   }
 }
+
+export interface QueueCounts {
+  waiting: number;
+  active: number;
+  completed: number;
+  failed: number;
+  delayed: number;
+}
+
+/**
+ * Live job counts for the task queue, resolved through TASK_QUEUE so callers
+ * can never point at a stale/renamed Redis key prefix (the old admin stats
+ * read `bull:ai-harness-tasks:*` while the queue is `task-lifecycle` — always
+ * zeros). Throws when Redis is unavailable; callers degrade to zeros/skip.
+ */
+export async function getQueueCounts(): Promise<QueueCounts> {
+  const counts = await getTaskQueue().getJobCounts("wait", "active", "completed", "failed", "delayed");
+  return {
+    waiting: counts.wait ?? 0,
+    active: counts.active ?? 0,
+    completed: counts.completed ?? 0,
+    failed: counts.failed ?? 0,
+    delayed: counts.delayed ?? 0,
+  };
+}

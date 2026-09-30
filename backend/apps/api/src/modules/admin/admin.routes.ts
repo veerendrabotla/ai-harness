@@ -5,6 +5,7 @@
 import type { FastifyInstance } from "fastify";
 import { errors } from "@ai-harness/shared";
 import { ok } from "../../lib/http.js";
+import { getQueueCounts } from "../../lib/task-queue.js";
 
 export default function registerAdminRoutes(app: FastifyInstance) {
   // All admin routes require authentication + platform admin role
@@ -184,20 +185,17 @@ export default function registerAdminRoutes(app: FastifyInstance) {
       where: { state: { in: ["QUEUED", "EXECUTING", "PLANNING"] } },
     });
 
-    // Get queue stats from BullMQ
+    // Get queue stats from BullMQ (TASK_QUEUE resolves the real key prefix —
+    // the previous hardcoded `bull:ai-harness-tasks:*` keys never existed).
     let queueStats = { waiting: 0, active: 0, completed: 0, failed: 0 };
     try {
-      const { getSharedRedis } = await import("../../lib/redis.js");
-      const redis = getSharedRedis();
-      if (redis) {
-        const [waiting, active, completed, failed] = await Promise.all([
-          redis.llen("bull:ai-harness-tasks:wait"),
-          redis.llen("bull:ai-harness-tasks:active"),
-          redis.zcard("bull:ai-harness-tasks:completed"),
-          redis.zcard("bull:ai-harness-tasks:failed"),
-        ]);
-        queueStats = { waiting, active, completed, failed };
-      }
+      const counts = await getQueueCounts();
+      queueStats = {
+        waiting: counts.waiting,
+        active: counts.active,
+        completed: counts.completed,
+        failed: counts.failed,
+      };
     } catch (err) {
       app.log.warn({ err }, "Redis unavailable for queue stats");
     }

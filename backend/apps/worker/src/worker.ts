@@ -19,6 +19,7 @@ import { TASK_EVENT_TYPES } from "@ai-harness/domain";
 import { MCPRegistry } from "@ai-harness/mcp-platform";
 import { buildCompositeResolver } from "./sandbox.js";
 import { sweepStuckRuns } from "./stuck-run-sweep.js";
+import { cleanStaleJobs, QUEUE_RETENTION } from "./queue-hygiene.js";
 
 // Notification service import (duplicated to avoid cross-package dependency)
 async function sendTaskNotification(
@@ -144,6 +145,10 @@ async function main() {
     defaultJobOptions: {
       attempts: 3,
       backoff: { type: "exponential", delay: 5_000 },
+      // Match the API producer's retention caps — recovery enqueues (orphan
+      // re-starts, resume replays) otherwise keep job records forever.
+      removeOnComplete: 500,
+      removeOnFail: 1000,
     },
   });
 
@@ -469,6 +474,25 @@ async function main() {
         }
       } catch (err) {
         logger.warn({ err: redactValue(err instanceof Error ? err.message : err) }, "backup cleanup sweep failed");
+      }
+
+      // ── Stale queue-job hygiene: reap old completed/failed job records ──
+      // Count caps on defaultJobOptions only bound NEW jobs; age-based clean
+      // also drains the legacy backlog and worker-enqueued recovery jobs.
+      try {
+        const lastQueueCleanup = (globalThis as unknown as { __lastQueueCleanup?: number }).__lastQueueCleanup ?? 0;
+        if (Date.now() - lastQueueCleanup > QUEUE_RETENTION.cleanupIntervalMs) {
+          (globalThis as unknown as { __lastQueueCleanup: number }).__lastQueueCleanup = Date.now();
+          const removed = await cleanStaleJobs(statsQueue);
+          if (removed.completed > 0 || removed.failed > 0) {
+            logger.info(
+              { metric: "queue_jobs_cleaned", completed: removed.completed, failed: removed.failed },
+              "stale queue jobs cleaned",
+            );
+          }
+        }
+      } catch (err) {
+        logger.warn({ err: redactValue(err instanceof Error ? err.message : err) }, "queue hygiene sweep failed");
       }
 
       // ── Queue observability metrics ──

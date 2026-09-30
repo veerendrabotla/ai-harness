@@ -295,7 +295,7 @@ External-only (not in the 20): GCP/terraform apply, Resend key, Sentry/PostHog -
 ### Execution log
 - [x] 1 git  - [x] 2 audit  - [x] 3 e2e battery  - [x] 4 CI docker  - [x] 5 terraform
 - [x] 6 bounds  - [x] 7 sweeper  - [x] 8 reviewer  - [x] 9 adapters  - [x] 10 email  - [x] 11 sandbox
-- [x] 12 bridge-proxy  - [x] 13 load  - [ ] 14 hygiene
+- [x] 12 bridge-proxy  - [x] 13 load  - [x] 14 hygiene
 - [ ] 15 prompt  - [ ] 16 pricing+bench  - [ ] 17 rules+cases  - [ ] 18 enterprise  - [ ] 19 guides  - [ ] 20 release
 
 ### PHASE 13 execution log (tasks 1-2)
@@ -390,6 +390,14 @@ External-only (not in the 20): GCP/terraform apply, Resend key, Sentry/PostHog -
   - Tooling: `artillery@2.0.34` added (profile `loadtest.yml` + `loadtest-processor.js` fixing the `$randomNumber` 409 storm with unique emails) but artillery hard-crashes on this Windows host with `0xC0000409` (Windows/Node fast-fail, 3 occurrences, no JS stack) → **k6 is the definitive runner**, artillery profile kept for CI/Linux. Fixed a harness bug mid-task: cooldown `constant-vus` had no `sleep` → unthrottled ~219/s flood to one replica flattered p95; run discarded, `sleep(1)` added, re-run green.
   - Artifacts: `multi-instance.js`, `multi-instance-results.json`, `multi-instance-report.md`, `docker-compose.load.yml`, `loadtest.yml`, `loadtest-processor.js` (root `package.json` gains `artillery` devDep + `loadtest` script).
   - Audit: FINAL_GAP_AUDIT "Multi-replica load test" **Cat-2 row closed** (Cat 2: 11 → 10); cloud multi-instance load remains a Cat-5 infra item.
+
+### PHASE 13 execution log (task 14) — worker stale-failure hygiene
+
+- [x] 14 hygiene — Redis job-record retention + failed-count metrics across the worker/API:
+  - **Auto-clean**: new `backend/apps/worker/src/queue-hygiene.ts` (`QUEUE_RETENTION`: completed >24h, failed >7d, hourly gate, 10k batch limit) wired into the worker's 30s sweep as an hourly block (same `globalThis` idiom as backup cleanup) that logs `metric: "queue_jobs_cleaned"` with per-state removed counts; errors → warn + retry next cycle. Worker's `statsQueue` also gained the producer retention caps (`removeOnComplete: 500`, `removeOnFail: 1000` — recovery enqueues previously kept records forever; API producer/email/scheduler queues already capped).
+  - **Failed count in metrics**: `getQueueCounts()` in `lib/task-queue.ts` resolves counts through `TASK_QUEUE` — fixes the **admin stats reading `bull:ai-harness-tasks:*` (a prefix that never existed; queue is `task-lifecycle` → always zeros)**; `GET /metrics` (Prometheus) now appends `queue_jobs{state=...}` gauges incl. `failed` (omitted only if Redis is down); `GET /v1/admin/metrics` returns `queue: {waiting,active,completed,failed,delayed}` (zeros on outage); `GET /v1/admin/stats` uses the same helper (response shape unchanged).
+  - **Tests**: `queue-hygiene.test.ts` 4/4 (grace/type/limit args, constants, idempotency, error propagation) + `tests/queue-metrics.test.ts` 3/3 (gauge emission incl. `failed`, zero-gauges, exposition format) → 7/7 new.
+  - **Gates**: `typecheck` 0 · `lint` 0 · `RUN_INTEGRATION=1 npm test` **57/61 files parallel** + the 4-file contention group green in isolation (**27/27**). Root-caused instead of hand-waved: the #13 load runs **exhausted the SIGNUP rate-limit bucket (`ah-rl:*`, 100/hr/IP, Redis-backed so it survived container recreation)** → those suites' beforeAll signups got 429 → tokenless 401 cascade. Flushed `ah-rl:*` → signup 201 → 4/4 green. (Also explains similar historical beforeAll flakes — flush `ah-rl:*` after heavy load runs.)
 
 
 

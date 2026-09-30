@@ -6,9 +6,19 @@ import type { FastifyInstance } from "fastify";
 import { ok } from "../../lib/http.js";
 import { HealthChecker } from "@ai-harness/health-checker";
 import { getSharedRedis } from "../../lib/redis.js";
-import { apiMetrics } from "../../lib/metrics.js";
+import { apiMetrics, queueCountsToPrometheus } from "../../lib/metrics.js";
+import { getQueueCounts, type QueueCounts } from "../../lib/task-queue.js";
 
 const healthChecker = new HealthChecker({ timeoutMs: 5000 });
+
+/** Queue counts or zeros — metrics endpoints must not fail on Redis outages. */
+async function safeQueueCounts(): Promise<QueueCounts | null> {
+  try {
+    return await getQueueCounts();
+  } catch {
+    return null;
+  }
+}
 
 export default function registerMonitoringRoutes(app: FastifyInstance) {
   const adminPreHandler = [app.authenticate, app.requirePlatformAdmin];
@@ -94,8 +104,11 @@ export default function registerMonitoringRoutes(app: FastifyInstance) {
       `# TYPE process_uptime_seconds gauge`,
       `process_uptime_seconds ${process.uptime().toFixed(1)}`,
     ].join("\n") + "\n";
+    // Task-queue depth incl. failed count (omitted only if Redis is down)
+    const counts = await safeQueueCounts();
+    const queue = counts ? queueCountsToPrometheus(counts) : "";
     reply.header("content-type", "text/plain; version=0.0.4");
-    return reply.send(extra + prom.text);
+    return reply.send(extra + queue + prom.text);
   });
 
   /**
@@ -117,6 +130,7 @@ export default function registerMonitoringRoutes(app: FastifyInstance) {
   }, async (req, reply) => {
     const query = (req.query ?? {}) as { name?: string };
     const metrics = apiMetrics.getMetrics(query.name);
+    const counts = await safeQueueCounts();
 
     return ok(reply, {
       metrics,
@@ -127,6 +141,7 @@ export default function registerMonitoringRoutes(app: FastifyInstance) {
           apiMetrics.getCounter(name),
         ]),
       ),
+      queue: counts ?? { waiting: 0, active: 0, completed: 0, failed: 0, delayed: 0 },
     });
   });
 }
