@@ -22,6 +22,7 @@ This documentation hub links every guide, reference, and deep-dive document in t
 | Automate in CI/CD | [Examples](examples/README.md) |
 | Connect external tool servers | [MCP Guide](guides/mcp.md) |
 | Deploy and operate the platform | [Self-Hosting Guide](guides/self-hosting.md) |
+| Roll out SSO, SCIM, audit, backups for a team | [Enterprise Setup](ENTERPRISE_SETUP.md) |
 | Diagnose a problem | [Troubleshooting](troubleshooting.md) |
 
 ---
@@ -51,6 +52,7 @@ This documentation hub links every guide, reference, and deep-dive document in t
 | [Hooks & Events](guides/hooks-and-events.md) | Realtime events, replay, lifecycle hooks, metrics |
 | [MCP](guides/mcp.md) | Connect HTTP/SSE/STDIO Model Context Protocol servers |
 | [Self-Hosting](guides/self-hosting.md) | Single-node, production containers, GCP/Terraform, scaling |
+| [Enterprise Setup](ENTERPRISE_SETUP.md) | SSO/SCIM, roles, audit, secrets, IP allowlist, backups, rollout playbook |
 
 ### Reference
 
@@ -97,6 +99,8 @@ This documentation hub links every guide, reference, and deep-dive document in t
 **Integrator (1 hour):** [API Reference](API.md) → [SDK Guide](../SDK_GUIDE.md) → [Hooks & Events](guides/hooks-and-events.md) → [MCP](guides/mcp.md)
 
 **Operator / platform engineer:** [Self-Hosting](guides/self-hosting.md) → [Troubleshooting](troubleshooting.md) → [Security](../SECURITY.md)
+
+**Admin / security owner:** [Enterprise Setup](ENTERPRISE_SETUP.md) → [Rules & Instructions](RULES_AND_INSTRUCTIONS.md) → [Security](../SECURITY.md)
 
 **Contributor:** [Architecture](../ARCHITECTURE.md) → [Backend Structure](BACKEND_STRUCTURE.md) → [Agent Runtime](AGENT_RUNTIME.md) → [Contributing](../CONTRIBUTING.md)
 
