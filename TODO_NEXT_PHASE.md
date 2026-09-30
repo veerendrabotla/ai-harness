@@ -296,7 +296,7 @@ External-only (not in the 20): GCP/terraform apply, Resend key, Sentry/PostHog -
 - [x] 1 git  - [x] 2 audit  - [x] 3 e2e battery  - [x] 4 CI docker  - [x] 5 terraform
 - [x] 6 bounds  - [x] 7 sweeper  - [x] 8 reviewer  - [x] 9 adapters  - [x] 10 email  - [x] 11 sandbox
 - [x] 12 bridge-proxy  - [x] 13 load  - [x] 14 hygiene
-- [ ] 15 prompt  - [ ] 16 pricing+bench  - [ ] 17 rules+cases  - [ ] 18 enterprise  - [ ] 19 guides  - [ ] 20 release
+- [x] 15 prompt  - [ ] 16 pricing+bench  - [ ] 17 rules+cases  - [ ] 18 enterprise  - [ ] 19 guides  - [ ] 20 release
 
 ### PHASE 13 execution log (tasks 1-2)
 
@@ -398,6 +398,13 @@ External-only (not in the 20): GCP/terraform apply, Resend key, Sentry/PostHog -
   - **Failed count in metrics**: `getQueueCounts()` in `lib/task-queue.ts` resolves counts through `TASK_QUEUE` — fixes the **admin stats reading `bull:ai-harness-tasks:*` (a prefix that never existed; queue is `task-lifecycle` → always zeros)**; `GET /metrics` (Prometheus) now appends `queue_jobs{state=...}` gauges incl. `failed` (omitted only if Redis is down); `GET /v1/admin/metrics` returns `queue: {waiting,active,completed,failed,delayed}` (zeros on outage); `GET /v1/admin/stats` uses the same helper (response shape unchanged).
   - **Tests**: `queue-hygiene.test.ts` 4/4 (grace/type/limit args, constants, idempotency, error propagation) + `tests/queue-metrics.test.ts` 3/3 (gauge emission incl. `failed`, zero-gauges, exposition format) → 7/7 new.
   - **Gates**: `typecheck` 0 · `lint` 0 · `RUN_INTEGRATION=1 npm test` **57/61 files parallel** + the 4-file contention group green in isolation (**27/27**). Root-caused instead of hand-waved: the #13 load runs **exhausted the SIGNUP rate-limit bucket (`ah-rl:*`, 100/hr/IP, Redis-backed so it survived container recreation)** → those suites' beforeAll signups got 429 → tokenless 401 cascade. Flushed `ah-rl:*` → signup 201 → 4/4 green. (Also explains similar historical beforeAll flakes — flush `ah-rl:*` after heavy load runs.)
+
+### PHASE 13 execution log (task 15) — docs/PROMPT_GUIDE.md
+
+- [x] 15 prompt — new **`docs/PROMPT_GUIDE.md` (504 lines / ~3.2k words)**, benchmark §7 item 2 ("Copilot 6 rules + Claude prompt library", target 500). Grounded in a full code-map of the real prompt architecture (context-engine `CONTEXT_PRIORITY` ranks + 120 KB budget + `<untrusted>` fences, `RUNTIME_SYSTEM_INSTRUCTIONS`, mode constraints, plan/revise/reviewer contracts, memory extraction rules, per-stage model routing) — every claim traced to source, two would-be-wrong examples caught during review (nonexistent `frontend/src/lib/tokens` path, false "email retry ladder" claim).
+  - Structure: six rules (each with good/bad `text` fences applied to AI Harness surfaces) · anatomy table of what reaches the model + a "what is NOT in the prompt" section (policy/tool rules/knowledge base/`AGENTS.md` — the common misconceptions) · surface-choice decision table (goal vs constraints vs instructions vs policy vs memory vs mode) · **prompt library** (11 copy-paste recipes + 3-stage "vague → specific → fully specified" worked example + constraints showcase) · advanced (revision instructions, memory steering, model routing, compaction, "policy beats prompting") · anti-pattern table · quick reference.
+  - Linked (all 8 file links verified resolving): concepts, context-and-memory, permissions-and-approvals, models-and-providers, AGENT_RUNTIME, APP_FLOW, examples/README, DOCUMENTATION_BENCHMARK. Indexed in `docs/README.md` (Guides table + surface chooser).
+  - Gates: `typecheck` 0 · `lint` 0 · benchmark §9 checks (title/sections/fences/links/line-count) pass.
 
 
 

@@ -11,6 +11,7 @@ This documentation hub links every guide, reference, and deep-dive document in t
 | If you want to… | Start here |
 |---|---|
 | Run the web app and drive agent tasks | [Getting Started](getting-started.md) |
+| Write goals and prompts that get better results | [Prompt Guide](PROMPT_GUIDE.md) |
 | Understand how runs, permissions, and context work | [Core Concepts](concepts.md) |
 | Use the CLI | [CLI Guide](../CLI_GUIDE.md) |
 | Integrate via the SDK | [SDK Guide](../SDK_GUIDE.md) |
@@ -37,6 +38,7 @@ This documentation hub links every guide, reference, and deep-dive document in t
 
 | Document | What it covers |
 |---|---|
+| [Prompt Guide](PROMPT_GUIDE.md) | Six prompt rules, what reaches the model, prompt library |
 | [Permissions & Approvals](guides/permissions-and-approvals.md) | ALLOW / ASK / DENY, policies, approval flow, security scan gate |
 | [Context & Memory](guides/context-and-memory.md) | Budgeted context assembly, repo map, compaction, project memory |
 | [Models & Providers](guides/models-and-providers.md) | Provider credentials, model routing, fallbacks, cost tracking |
