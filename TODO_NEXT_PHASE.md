@@ -296,7 +296,7 @@ External-only (not in the 20): GCP/terraform apply, Resend key, Sentry/PostHog -
 - [x] 1 git  - [x] 2 audit  - [x] 3 e2e battery  - [x] 4 CI docker  - [x] 5 terraform
 - [x] 6 bounds  - [x] 7 sweeper  - [x] 8 reviewer  - [x] 9 adapters  - [x] 10 email  - [x] 11 sandbox
 - [x] 12 bridge-proxy  - [x] 13 load  - [x] 14 hygiene
-- [x] 15 prompt  - [x] 16 pricing+bench  - [ ] 17 rules+cases  - [ ] 18 enterprise  - [ ] 19 guides  - [ ] 20 release
+- [x] 15 prompt  - [x] 16 pricing+bench  - [x] 17 rules+cases  - [ ] 18 enterprise  - [ ] 19 guides  - [ ] 20 release
 
 ### PHASE 13 execution log (tasks 1-2)
 
@@ -432,3 +432,13 @@ Prioritized from a full Qoder feature comparison; we remain ahead on the 16-stat
   - Benchmarks executed live while writing: `npm run bench:replay` x7 (all `REPLAY BENCH OK`, exit 0) + default `npm test` (exit 0).
   - Cross-indexed in `docs/README.md` (surface chooser + Guides + Reference rows). Link checks: MODELS 23/23 and BENCHMARKS 32/32 internal links resolve (files + heading anchors); fences are bash/text/json per §9; no duplication with `guides/models-and-providers.md` (routing/cost-tracking internals stay canonical there; new docs link instead).
   - Gates: `typecheck` 0 - `lint` 0 - §9 structural checklist (title/## sections/fences/links) pass for both files.
+
+### PHASE 13 execution log (task 17) - docs/RULES_AND_INSTRUCTIONS.md + docs/USE_CASES.md
+
+- [x] 17 rules+cases - two new docs covering benchmark §7 items 4 ("Cursor rules matrix + Cline customization", est 500) and 6 ("Replit 26 workflows + Lovable 12 verticals", est 700).
+  - **`docs/RULES_AND_INSTRUCTIONS.md` (452 lines / ~3.4k words)** - the steering map, grounded in a full code-map (two parallel source explorations): **four honest tiers** - runtime system instructions (3 hardcoded strings + 6 role prompts + mode template), workspace instructions (versioned `workspace_instruction_versions`, 200k POST / 10k effective at create, rank 2 mandatory), task rules (goal rank 3 mandatory 10k, constraints rank 4 cut-first 10k, revision 10k, mode line), and **policy as tier 4 which never reaches the prompt** (6 WorkspacePolicy scalars with defaults/ranges, ToolPolicyRule fields, per-run immutable snapshots). Includes the benchmark's requested **frontmatter matrix as an honest mapping table** (Cursor alwaysApply/applyTo/description -> tiers; `applyTo globs` = explicitly unsupported with equivalents), a **negative-space section** (AGENTS.md/CLAUDE.md/.cursorrules not read - zero code refs; no project instructions; knowledge not injected), a **Cursor/Cline migration playbook** (7 steps + before/after), **worked policy PUT curl + JSON payload**, **"anatomy of one decision"** walkthrough (terminal.run -> ASK -> WAITING_FOR_TOOL_APPROVAL), recipe set (instructions skeleton, constraints micro-patterns, 4 policy shapes, task templates as reusable rules), **limits table** (14 caps incl. effective-vs-schema disagreements documented as effective), product surfaces, precedence rules, 7-item FAQ, related-reading map to canonical owners.
+    Research flagged PROMPT_GUIDE's "constraints mandatory?" row as contradicting code (cut at rank 4) - documented per code, no contradiction propagated.
+  - **`docs/USE_CASES.md` (699 lines / est 700)** - **26 entries in 13 buckets**, each with the same six fields (Problem / copy-paste Goal / Context / Artifacts / Permissions / Surface) per the benchmark spec (prompt + data source + artifact): bugfix(3), features(3), plan-first(2), refactor(3), tests(2), review(2), security(2), docs(2), cicd(2), safety/recovery(2), local(1), team(1), prompt-to-app(1 incl. the 10 real builder templates with their verificationCommands). All entries grounded in verified capabilities (5 agent modes, 24-tool registry risk tiers, CLI CI flags + exit codes, security-scan finding types, checkpoints/MCP/deploy tools, 30 tasks/hour limit, effective policy defaults) and cross-linked to the 8 deep example walkthroughs instead of duplicating them; ends with mode/surface quick-reference, "make an entry yours" (task templates), related reading.
+  - Index rows added to `docs/README.md` (surface chooser + Guides table).
+  - **Link verification (UTF-8-aware checker): RULES 31/31, USE_CASES 34/34, MODELS 23/23, BENCHMARKS 32/32 - 0 broken files/anchors** (GitHub-exact slugger incl. em-dash/backtick headings). Two initially-failing anchors fixed (double-hyphen slugs for em-dash and `rm -rf` headings).
+  - Gates: `typecheck` 0 - `lint` 0.

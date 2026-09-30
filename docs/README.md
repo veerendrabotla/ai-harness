@@ -12,6 +12,8 @@ This documentation hub links every guide, reference, and deep-dive document in t
 |---|---|
 | Run the web app and drive agent tasks | [Getting Started](getting-started.md) |
 | Write goals and prompts that get better results | [Prompt Guide](PROMPT_GUIDE.md) |
+| Find your situation and copy a runnable goal | [Use Cases](USE_CASES.md) |
+| Set workspace rules, policies, and constraints | [Rules & Instructions](RULES_AND_INSTRUCTIONS.md) |
 | Compare model costs and pick plans | [Models & Pricing](MODELS_AND_PRICING.md) |
 | Understand how runs, permissions, and context work | [Core Concepts](concepts.md) |
 | Use the CLI | [CLI Guide](../CLI_GUIDE.md) |
@@ -40,6 +42,8 @@ This documentation hub links every guide, reference, and deep-dive document in t
 | Document | What it covers |
 |---|---|
 | [Prompt Guide](PROMPT_GUIDE.md) | Six prompt rules, what reaches the model, prompt library |
+| [Rules & Instructions](RULES_AND_INSTRUCTIONS.md) | The four steering tiers, policy enforcement, caps, migration playbook |
+| [Use Cases](USE_CASES.md) | 26 templated workflows: goal, context, artifacts, permissions |
 | [Models & Pricing](MODELS_AND_PRICING.md) | 50-model price matrix, plan quotas, cost controls, worked examples |
 | [Permissions & Approvals](guides/permissions-and-approvals.md) | ALLOW / ASK / DENY, policies, approval flow, security scan gate |
 | [Context & Memory](guides/context-and-memory.md) | Budgeted context assembly, repo map, compaction, project memory |
