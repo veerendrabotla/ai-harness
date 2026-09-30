@@ -296,7 +296,7 @@ External-only (not in the 20): GCP/terraform apply, Resend key, Sentry/PostHog -
 - [x] 1 git  - [x] 2 audit  - [x] 3 e2e battery  - [x] 4 CI docker  - [x] 5 terraform
 - [x] 6 bounds  - [x] 7 sweeper  - [x] 8 reviewer  - [x] 9 adapters  - [x] 10 email  - [x] 11 sandbox
 - [x] 12 bridge-proxy  - [x] 13 load  - [x] 14 hygiene
-- [x] 15 prompt  - [ ] 16 pricing+bench  - [ ] 17 rules+cases  - [ ] 18 enterprise  - [ ] 19 guides  - [ ] 20 release
+- [x] 15 prompt  - [x] 16 pricing+bench  - [ ] 17 rules+cases  - [ ] 18 enterprise  - [ ] 19 guides  - [ ] 20 release
 
 ### PHASE 13 execution log (tasks 1-2)
 
@@ -422,3 +422,13 @@ Prioritized from a full Qoder feature comparison; we remain ahead on the 16-stat
 9. **`SKILL.md` skill format** — adopt the emerging portable skills convention for the instruction system.
 10. **Agent teams CLI** — `ah agents` orchestration surface (long-term).
 11. **Marketplace** — skills/extensions publishing (long-term, post v0.1.0).
+
+### PHASE 13 execution log (task 16) - docs/MODELS_AND_PRICING.md + docs/BENCHMARKS.md
+
+- [x] 16 pricing+bench - two new docs covering benchmark §7 items 3 ("Cursor per-model + Copilot AI credits", est 400) and 7 ("Aider leaderboards", est 400).
+  - **`docs/MODELS_AND_PRICING.md` (378 lines / 2.5k words)** - full **50-row price matrix** generated from the canonical `backend/packages/contracts/src/pricing.ts` (8 provider groups; Catalog ✓ column marks the 22 selectable ids from `PROVIDER_CATALOG` with their real context lengths); cost formula + worked examples (25x flagship-vs-cheap spread on a 120K planning turn; Free-plan arithmetic); plans table from `BILLING_PLANS` ($0/$49/$499 with token+cost caps); credits-vs-meters explanation (no prepaid packs); verified product surfaces - `/v1/models` sample response, `/v1/models/providers`, playground `pricing` + `cost`, and the concrete `/v1/usage/*` family (`by-model`, `by-task`, `trend`, `cost-summary`, `cost-breakdown`, `cost-alerts`, `anomalies`, `quota`, `/v1/admin/usage`); cost-controls table; per-stage guidance using real `MODEL_STAGES` (PLANNING/IMPLEMENTATION/REVIEW); price-update path; 9-item FAQ (incl. unknown-model fallback `~$2/$8 per 1M`, BYOK, flat-per-token pricing).
+    Self-review caught and fixed 3 would-be-wrong claims: local-model quota assertion (softened to verified wording), a link promising "billing vocabulary" in API.md (section not yet written - relinked), and vague "dashboards aggregate" (replaced with real endpoint names after reading `usage.routes.ts`).
+  - **`docs/BENCHMARKS.md` (365 lines / 2.5k words)** - Aider-style quant page: environment table (i5-1135G7 / 11.7 GB / Node 24 / Docker 29.4.3 / Compose 5.1.4 / k6 2.3.0), methodology rules (gate vs probe, client vs server percentiles, no cross-host comparisons) + glossary; **load profile with the real #13 numbers** (gate: 8,632 reqs, p95 199ms, 5/5 thresholds, 0.00% failed; probe: ceiling 50-75 rps, 0.00% errors while collapsing, endpoint attribution table); **budget-derivation table** (750/2500ms = worst observed x ~1.4 headroom); committed-artifact inventory; **bench:replay 7-run results table** (median p50 ~21.5ms, totals <=114ms, honest caveats: fresh-task streams 1-4 pages, deep-stream seeding unimplemented); scenario-suite harness documented with an **empty leaderboard template governed by 5 inclusion rules** - no fabricated model numbers (`.env` carries no model credentials by design; external-only); regression floor (default `npm test` 554 pass | 22 skip, 60/61 files, 17.11s) including the `ah-rl:*` flush recipe; reproduce block; dated run log; FAQ (why k6 over artillery: Windows `0xC0000409` crash; why limits raised; why a 99-exit run is published).
+  - Benchmarks executed live while writing: `npm run bench:replay` x7 (all `REPLAY BENCH OK`, exit 0) + default `npm test` (exit 0).
+  - Cross-indexed in `docs/README.md` (surface chooser + Guides + Reference rows). Link checks: MODELS 23/23 and BENCHMARKS 32/32 internal links resolve (files + heading anchors); fences are bash/text/json per §9; no duplication with `guides/models-and-providers.md` (routing/cost-tracking internals stay canonical there; new docs link instead).
+  - Gates: `typecheck` 0 - `lint` 0 - §9 structural checklist (title/## sections/fences/links) pass for both files.

@@ -12,6 +12,7 @@ This documentation hub links every guide, reference, and deep-dive document in t
 |---|---|
 | Run the web app and drive agent tasks | [Getting Started](getting-started.md) |
 | Write goals and prompts that get better results | [Prompt Guide](PROMPT_GUIDE.md) |
+| Compare model costs and pick plans | [Models & Pricing](MODELS_AND_PRICING.md) |
 | Understand how runs, permissions, and context work | [Core Concepts](concepts.md) |
 | Use the CLI | [CLI Guide](../CLI_GUIDE.md) |
 | Integrate via the SDK | [SDK Guide](../SDK_GUIDE.md) |
@@ -39,6 +40,7 @@ This documentation hub links every guide, reference, and deep-dive document in t
 | Document | What it covers |
 |---|---|
 | [Prompt Guide](PROMPT_GUIDE.md) | Six prompt rules, what reaches the model, prompt library |
+| [Models & Pricing](MODELS_AND_PRICING.md) | 50-model price matrix, plan quotas, cost controls, worked examples |
 | [Permissions & Approvals](guides/permissions-and-approvals.md) | ALLOW / ASK / DENY, policies, approval flow, security scan gate |
 | [Context & Memory](guides/context-and-memory.md) | Budgeted context assembly, repo map, compaction, project memory |
 | [Models & Providers](guides/models-and-providers.md) | Provider credentials, model routing, fallbacks, cost tracking |
@@ -52,6 +54,7 @@ This documentation hub links every guide, reference, and deep-dive document in t
 |---|---|
 | [API Reference](API.md) | REST endpoints, envelopes, WebSocket events |
 | [Agent Runtime](AGENT_RUNTIME.md) | Runtime architecture, state machine, execution loop |
+| [Benchmarks](BENCHMARKS.md) | Reproducible load/replay results, methodology, leaderboard format |
 | [Backend Structure](BACKEND_STRUCTURE.md) | Per-package layout and database schema |
 | [Tool Guide](../TOOL_GUIDE.md) | Tool registry, risk levels, execution environments |
 | [CLI Guide](../CLI_GUIDE.md) | CLI commands and flags |
