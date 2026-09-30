@@ -1,0 +1,41 @@
+{
+  "kind": "multi-instance",
+  "instances": [
+    "http://localhost:4000",
+    "http://localhost:4001"
+  ],
+  "totalRequests": 8632,
+  "httpFailedRate": 0,
+  "checkErrorRate": 0,
+  "avgLatencyMs": 58.413267319277104,
+  "p95LatencyMs": 199.3361049999999,
+  "p99LatencyMs": 320.15608600000047,
+  "signups": 2016,
+  "droppedIterations": 0,
+  "thresholds": {
+    "errors": {
+      "rate<0.01": {
+        "ok": true
+      }
+    },
+    "http_req_duration": {
+      "p(95)<750": {
+        "ok": true
+      },
+      "p(99)<2500": {
+        "ok": true
+      }
+    },
+    "dropped_iterations": {
+      "count<50": {
+        "ok": true
+      }
+    },
+    "http_req_failed": {
+      "rate<0.01": {
+        "ok": true
+      }
+    }
+  },
+  "timestamp": "2026-09-30T20:09:00.597Z"
+}

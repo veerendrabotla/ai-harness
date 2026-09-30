@@ -98,9 +98,9 @@ Categories: **1** FULLY IMPLEMENTED AND VERIFIED · **2** IMPLEMENTED, INSUFFICI
 | Terraform GCP stack | 5 | HCL written; apply blocked on credentials |
 | Cloud-hosted sandbox infra | 5 | — |
 | Sentry dashboards / PostHog funnels | 5 | SDK init present; accounts needed |
-| Multi-replica load test | 2 | two-worker resilience passed; true multi-instance cloud load test pending infra |
 
 ## Summary counts
-- Cat 1: 38 · Cat 2: 11 · Cat 3: 0 open (all previous partials closed or reclassified) · Cat 4: 0 remaining · Cat 5: 4 items (Terraform apply, cloud sandbox infra, SaaS dashboards, multi-instance cloud load)
+- Cat 1: 38 · Cat 2: 10 · Cat 3: 0 open (all previous partials closed or reclassified) · Cat 4: 0 remaining · Cat 5: 4 items (Terraform apply, cloud sandbox infra, SaaS dashboards, multi-instance cloud load)
+- Closed 2026-10-01: **Multi-replica load test** (was Cat 2) — local 2-instance tier proven with k6: gate run `EXIT=0` at 50 rps (p95 199ms, 0% errors, 50.5/49.5 split) + 75 rps capacity probe (graceful latency collapse, still 0% errors). Evidence: `backend/load-tests/multi-instance-report.md`. Cloud multi-instance load stays Cat 5 (needs provisioned infra).
 
 **Nothing in Cat 3 or 4 remains.** Every gap either ships with evidence above or is listed in EXTERNAL_DEPLOYMENT_CHECKLIST.md.

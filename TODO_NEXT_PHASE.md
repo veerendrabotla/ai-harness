@@ -295,7 +295,7 @@ External-only (not in the 20): GCP/terraform apply, Resend key, Sentry/PostHog -
 ### Execution log
 - [x] 1 git  - [x] 2 audit  - [x] 3 e2e battery  - [x] 4 CI docker  - [x] 5 terraform
 - [x] 6 bounds  - [x] 7 sweeper  - [x] 8 reviewer  - [x] 9 adapters  - [x] 10 email  - [x] 11 sandbox
-- [x] 12 bridge-proxy  - [ ] 13 load  - [ ] 14 hygiene
+- [x] 12 bridge-proxy  - [x] 13 load  - [ ] 14 hygiene
 - [ ] 15 prompt  - [ ] 16 pricing+bench  - [ ] 17 rules+cases  - [ ] 18 enterprise  - [ ] 19 guides  - [ ] 20 release
 
 ### PHASE 13 execution log (tasks 1-2)
@@ -381,6 +381,15 @@ External-only (not in the 20): GCP/terraform apply, Resend key, Sentry/PostHog -
   - **Tests**: new `backend/apps/api/tests/preview-proxy.test.ts` **14/14** — ticket round-trip/expiry/project-binding/tamper; `toProxyUrl` absolute/relative/query/external/skip; HTML attr+srcset+style+`<base>` rewrite; CSS `url()` rewrite.
   - **Known limitations (service-worker path deferred by design)**: absolute-path `fetch()`/XHR generated at runtime inside the iframe is not rewritten (would resolve against the API host); Set-Cookie/ETag deliberately not forwarded; ETags bust the rewrite cache anyway.
   - Gates: `typecheck` 0 · `lint` 0 · FE `tsc` 0 · FE `lint` 0 err (2 known warn; fixed unescaped `'` from the new banner) · `RUN_INTEGRATION=1 npm test`: 54/59 files green in parallel + **5 contention flakes** (acceptance/sso/webcontainer `beforeAll` 15s hook timeouts, load 64% success, docker path-traversal timeout) → **all 49/49 green in isolated reruns** (4+11+7+5+22).
+
+### PHASE 13 execution log (task 13) — multi-instance local load test
+
+- [x] 13 load — compose-scaled **api x2** (`docker-compose.load.yml` override: `container_name: !reset null`, `ports: !override 4000-4001:4000`, `RATE_LIMIT_*` raised to 100k so the Redis limiter stays active without poisoning results) + **k6 v2.3.0** arrival-rate profile `backend/load-tests/multi-instance.js` (50/50 split by VU parity; 40% healthz / 30% signup+tasks / 20% login / 10% expected-401; `http.expectedStatuses` so 401s don't count as failures). Full report: **`backend/load-tests/multi-instance-report.md`**.
+  - **Gate run (definitive): `K6_EXIT=0`, 5/5 thresholds `ok`** — 8,632 reqs, client p95 **199ms** / p99 **320ms**, 0.00% failed, 0 dropped; server load-phase p95 **200.6 / 204.5** per instance (n=3982/3881, max 547/563, **zero >1s**); distribution **50.5/49.5** (incoming +4387/+4293). Budget consumption: p95 27%, p99 13%, failures 0%.
+  - **Capacity probe (spike 75 rps): `K6_EXIT=99` by design** — 15,805 reqs, **0.00% HTTP failures even while collapsing** (p95 5000ms client; server spike p95 **6328/7096**, p50 684/857, ~46% >1s, backlog drained ~20s). Ceiling for the auth-heavy mix = **between 50 (sustained) and 75 (collapse) rps**; endpoint attribution joins prove the tail is **argon2id** (signup p95 6753/7308, login 4613/5103) while `/healthz` stays flat (p95 55–71).
+  - Tooling: `artillery@2.0.34` added (profile `loadtest.yml` + `loadtest-processor.js` fixing the `$randomNumber` 409 storm with unique emails) but artillery hard-crashes on this Windows host with `0xC0000409` (Windows/Node fast-fail, 3 occurrences, no JS stack) → **k6 is the definitive runner**, artillery profile kept for CI/Linux. Fixed a harness bug mid-task: cooldown `constant-vus` had no `sleep` → unthrottled ~219/s flood to one replica flattered p95; run discarded, `sleep(1)` added, re-run green.
+  - Artifacts: `multi-instance.js`, `multi-instance-results.json`, `multi-instance-report.md`, `docker-compose.load.yml`, `loadtest.yml`, `loadtest-processor.js` (root `package.json` gains `artillery` devDep + `loadtest` script).
+  - Audit: FINAL_GAP_AUDIT "Multi-replica load test" **Cat-2 row closed** (Cat 2: 11 → 10); cloud multi-instance load remains a Cat-5 infra item.
 
 
 
