@@ -37,6 +37,8 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
       - run: npm ci --no-audit --no-fund
+      - name: Prisma generate
+        run: npx prisma generate --schema backend/prisma/schema.prisma
       - name: TypeScript type check
         run: npm run typecheck
 
@@ -76,7 +78,9 @@ jobs:
           cache: npm
       - run: npm ci --no-audit --no-fund
       - name: Prisma generate + migrate
-        run: npx prisma migrate deploy --schema backend/prisma/schema.prisma
+        run: |
+          npx prisma generate --schema backend/prisma/schema.prisma
+          npx prisma migrate deploy --schema backend/prisma/schema.prisma
       - name: Unit tests
         run: npx vitest run --exclude '**/races.integration.test.ts' --exclude '**/session-portability.integration.test.ts'
       - name: Integration tests
