@@ -356,27 +356,31 @@ pagination are all described in the [API Reference](API.md).
 ## First steps with the CLI
 
 The CLI speaks to a running API — the same one Docker just started. `npm
-install` links the `aiharness` binary from `@ai-harness/cli` into
-`node_modules/.bin`:
+install` links the `aiharness` binary from `@ai-harness/cli`. Task commands
+require `--project` (every task belongs to a project), and auth is a JWT in
+`AI_HARNESS_TOKEN` — see the [CLI Guide](../CLI_GUIDE.md#configuration-and-authentication)
+for the one-line login recipe.
 
 ```bash
-aiharness health                      # exit 0 when API + worker respond
-aiharness status                      # recent tasks and their states
-aiharness ask "what does this repo do?"   # read-only answer, no plan
-aiharness plan -f my-goal.txt         # draft plan, waits for approval in the UI
-aiharness run  -f my-goal.txt         # full build lifecycle
-aiharness fix  "tests fail in billing"
+aiharness health                          # exit 0 when the API responds
+aiharness sessions --workspace "$WS"      # tasks (sessions) with state + goal
+aiharness ask "what does this repo do?" --project "$PID"   # read-only, no plan
+aiharness plan "move session storage to redis" --project "$PID"   # plan, then stop
+aiharness run  "add a /health alias" --project "$PID"       # full build lifecycle
+aiharness fix  "tests fail in billing" --project "$PID"
+aiharness status <task-id>                # id, goal, state, created
 ```
 
-CI shape (exit codes: `0` pass · `1` findings/failures · `2` error):
+CI shape (exit codes: `0` pass · `1` findings, failure, or usage error —
+there is no `2`; branch on the JSON `passed` field to tell them apart):
 
 ```bash
-aiharness review  --ci --json --github   # PR review annotations
-aiharness test    --ci --json            # fix-loop until green, bounded
-aiharness security --ci --json           # secret/injection sweep
+aiharness review  --ci --json --github --project "$PID"   # PR annotations (not both: --json wins)
+aiharness test    --ci --json --project "$PID"            # bounded fix-loop, machine-readable
+aiharness security --ci --json --project "$PID"           # secret/injection sweep
 ```
 
-Full reference (every flag, JSON shapes, permission globs):
+Full reference (every flag, JSON schema, permission-glob semantics):
 [CLI Guide](../CLI_GUIDE.md).
 
 ## First steps with the SDK
@@ -386,34 +390,33 @@ import { AiHarnessClient } from "@ai-harness/sdk";
 
 const client = new AiHarnessClient({
   baseUrl: "http://localhost:4000",
-  accessToken: process.env.AH_TOKEN!,        // signup/login → accessToken
+  token: process.env.AH_TOKEN!,           // JWT from POST /v1/auth/login (15-min TTL)
 });
 
-// create a task (mirrors the New Task form)
-const { task } = await client.createTask({
-  workspaceId,
-  projectId,
+// create a task — the workspace is derived from the project automatically
+const task = await client.createTask({
+  projectId,                               // required
   goal: "Add a /health alias with one test",
   constraints: "Touch only apps/api route layer and its tests.",
-  agentMode: "BUILD",                        // BUILD | PLAN | ASK | REVIEW | FIX
+  agentMode: "BUILD",                      // BUILD | PLAN | ASK | REVIEW | FIX
 });
 
-// wait for the plan, then steer or approve
-if (task.status === "WAITING_FOR_APPROVAL") {
-  await client.revisePlan(task.planId, {
-    instruction: "Also add the alias to the OpenAPI doc.",
-  });
-  // ...or: await client.approvePlan(task.planId);
-}
+// steer or approve when the plan wants a decision
+const [plan] = await fetch(`${baseUrl}/v1/tasks/${task.id}/plans`, { headers })
+  .then((r) => r.json()).then((j) => j.data);          // plan list is REST-only
+if (plan) await client.revisePlan(task.id, plan.id, "Also update the OpenAPI doc.");
+// ...or: await client.approvePlan(task.id, plan.id);
 
-// drive it to completion and read the result
-const run = await client.getTask(task.id);
-console.log(run.status, run.verification?.results);
+// follow it to the end (streams until COMPLETED/FAILED/CANCELLED/INTERRUPTED)
+for await (const ev of client.streamEvents(task.id)) console.log(ev.eventType);
+const final = await client.getTask(task.id);
+console.log(final.state);
 ```
 
-Also available: pause/resume/cancel/retry, task events (the replayable
-stream), tool approvals (`approveTool`/`denyTool`), checkpoints, memory
-query/add, deployments. Recipes: [SDK Guide](../SDK_GUIDE.md).
+Also available: pause/resume/cancel/retry, list/search tasks, tool approvals
+(`approveTool`/`denyTool`), checkpoints (list + rollback), memory query/add,
+deployments, and a typed `SDKError` with `status`/`code`. Recipes and the
+full 31-method reference: [SDK Guide](../SDK_GUIDE.md).
 
 ---
 

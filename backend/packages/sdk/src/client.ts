@@ -1,7 +1,6 @@
 import type {
   Project,
   Task,
-  Session,
   Plan,
   PlanRejectResponse,
   PlanReviseResponse,
@@ -66,7 +65,18 @@ export class AiHarnessClient {
 
         if (!res.ok) {
           const error = (await res.json().catch(() => ({ error: res.statusText }))) as Record<string, unknown>;
-          const sdkError = new SDKError(String(error.error ?? res.statusText), res.status, error);
+          const envelope = error.error;
+          const message =
+            envelope && typeof envelope === "object" && "message" in envelope
+              ? String((envelope as { message: unknown }).message)
+              : typeof envelope === "string"
+                ? envelope
+                : res.statusText || `HTTP ${res.status}`;
+          const code =
+            envelope && typeof envelope === "object" && "code" in envelope
+              ? String((envelope as { code: unknown }).code)
+              : undefined;
+          const sdkError = new SDKError(message, res.status, error, code);
           if ([429, 502, 503].includes(res.status) && attempt < maxRetries) {
             const retryAfter = res.headers.get("Retry-After");
             const delay = retryAfter ? parseInt(retryAfter, 10) * 1000 : Math.min(1000 * 2 ** attempt, 10_000);
@@ -102,8 +112,22 @@ export class AiHarnessClient {
   }
 
   // Tasks/Sessions
-  async createTask(data: { goal: string; projectId?: string; workspaceId?: string; agentMode?: string }): Promise<Task> {
-    return this.request<Task>("/v1/tasks", { method: "POST", body: data });
+  async createTask(data: {
+    goal: string;
+    projectId: string;
+    workspaceId?: string;
+    agentMode?: string;
+    constraints?: string;
+  }): Promise<Task> {
+    let workspaceId = data.workspaceId;
+    if (!workspaceId) {
+      if (!data.projectId) {
+        throw new SDKError("createTask requires a projectId (tasks must belong to a project)", 400);
+      }
+      const project = await this.request<{ workspaceId: string }>(`/v1/projects/${data.projectId}`);
+      workspaceId = project.workspaceId;
+    }
+    return this.request<Task>("/v1/tasks", { method: "POST", body: { ...data, workspaceId } });
   }
 
   async getTask(taskId: string): Promise<Task> {
@@ -122,9 +146,12 @@ export class AiHarnessClient {
     return this.request<Task>(`/v1/tasks/${taskId}/cancel`, { method: "POST" });
   }
 
-  // Sessions
-  async listSessions(workspaceId: string): Promise<Session[]> {
-    return this.request<Session[]>(`/v1/workspaces/${workspaceId}/sessions`);
+  // Sessions (tasks ARE sessions in this architecture)
+  async listTasks(workspaceId: string, opts: { state?: string; limit?: number } = {}): Promise<Task[]> {
+    const query: Record<string, string> = { workspaceId };
+    if (opts.state) query.state = opts.state;
+    if (opts.limit !== undefined) query.limit = String(opts.limit);
+    return this.request<Task[]>("/v1/tasks", { query });
   }
 
   // Plans
@@ -136,8 +163,8 @@ export class AiHarnessClient {
     return this.request<PlanRejectResponse>(`/v1/tasks/${taskId}/plans/${planId}/reject`, { method: "POST", body: { reason } });
   }
 
-  async revisePlan(taskId: string, planId: string, instructions: string): Promise<PlanReviseResponse> {
-    return this.request<PlanReviseResponse>(`/v1/tasks/${taskId}/plans/${planId}/revise`, { method: "POST", body: { instructions } });
+  async revisePlan(taskId: string, planId: string, instruction: string): Promise<PlanReviseResponse> {
+    return this.request<PlanReviseResponse>(`/v1/tasks/${taskId}/plans/${planId}/revise`, { method: "POST", body: { instruction } });
   }
 
   // Approvals
@@ -149,21 +176,25 @@ export class AiHarnessClient {
     return this.request<ApprovalDecision>(`/v1/approvals/${approvalId}/deny`, { method: "POST", body: { reason } });
   }
 
-  // Events (streaming)
+  // Events (streaming) — incremental via afterSequence, stops on terminal state
   async *streamEvents(taskId: string, pollIntervalMs = 1000, abortSignal?: AbortSignal): AsyncGenerator<TaskEvent> {
-    const seen = new Set<string>();
     const deadline = Date.now() + 3_600_000; // 1 hour max
+    let afterSequence: number | undefined;
     while (Date.now() < deadline) {
       if (abortSignal?.aborted) return;
-      const events = await this.request<TaskEvent[]>(`/v1/tasks/${taskId}/events`);
-      for (const event of events) {
-        if (!seen.has(event.id)) {
-          seen.add(event.id);
+      for (;;) {
+        const query: Record<string, string> = { limit: "200" };
+        if (afterSequence !== undefined) query.afterSequence = String(afterSequence);
+        const page = await this.request<TaskEvent[]>(`/v1/tasks/${taskId}/events`, { query });
+        if (page.length === 0) break;
+        for (const event of page) {
           yield event;
+          if (typeof event.sequenceNumber === "number") afterSequence = event.sequenceNumber;
         }
+        if (page.length < 200) break;
       }
       const task = await this.request<{ state: string }>(`/v1/tasks/${taskId}`);
-      if (["COMPLETED", "FAILED", "CANCELLED", "PAUSED"].includes(task.state)) break;
+      if (["COMPLETED", "FAILED", "CANCELLED", "INTERRUPTED"].includes(task.state)) break;
       await new Promise((resolve) => {
         const timer = setTimeout(resolve, pollIntervalMs);
         abortSignal?.addEventListener("abort", () => { clearTimeout(timer); resolve(undefined); }, { once: true });
@@ -182,11 +213,23 @@ export class AiHarnessClient {
 
   // Memory
   async queryMemory(projectId: string, query: string): Promise<MemoryEntry[]> {
-    return this.request<MemoryEntry[]>(`/v1/projects/${projectId}/memory`, { query: { q: query } });
+    const res = await this.request<{ memories: MemoryEntry[] }>(`/v1/projects/${projectId}/memories`, { query: { q: query } });
+    return res.memories ?? [];
   }
 
-  async addMemory(projectId: string, data: { content: string; category: string }): Promise<MemoryEntry> {
-    return this.request<MemoryEntry>(`/v1/projects/${projectId}/memory`, { method: "POST", body: data });
+  async addMemory(
+    projectId: string,
+    data: {
+      category: string;
+      key: string;
+      value: string;
+      context: string;
+      confidence?: number;
+      source?: string;
+      references?: string[];
+    },
+  ): Promise<MemoryEntry> {
+    return this.request<MemoryEntry>(`/v1/projects/${projectId}/memories`, { method: "POST", body: data });
   }
 
   // Checkpoints
@@ -194,8 +237,8 @@ export class AiHarnessClient {
     return this.request<Checkpoint[]>(`/v1/tasks/${taskId}/checkpoints`);
   }
 
-  async restoreCheckpoint(checkpointId: string): Promise<CheckpointRestoreResponse> {
-    return this.request<CheckpointRestoreResponse>(`/v1/checkpoints/${checkpointId}/restore`, { method: "POST", body: { confirm: true } });
+  async rollbackCheckpoint(checkpointId: string): Promise<CheckpointRestoreResponse> {
+    return this.request<CheckpointRestoreResponse>(`/v1/checkpoints/${checkpointId}/rollback`, { method: "POST", body: { confirm: true } });
   }
 
   // Health
@@ -238,11 +281,13 @@ export class AiHarnessClient {
 export class SDKError extends Error {
   status: number;
   body: unknown;
-  constructor(message: string, status: number, body?: unknown) {
+  code?: string;
+  constructor(message: string, status: number, body?: unknown, code?: string) {
     super(message);
     this.name = "SDKError";
     this.status = status;
     this.body = body;
+    this.code = code;
     if (Error.captureStackTrace) {
       Error.captureStackTrace(this, SDKError);
     }

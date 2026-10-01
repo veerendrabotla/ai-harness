@@ -1,4 +1,4 @@
-﻿# AI Harness — Phased Roadmap & Execution Log
+# AI Harness — Phased Roadmap & Execution Log
 
 > **Process rule:** this file is APPEND-ONLY and ITERATIVE. Completed phases are never deleted — they stay documented below as the execution record. New work is always appended as the next phase section with status `PLANNED → IN PROGRESS → DONE` plus verification evidence.
 
@@ -296,7 +296,7 @@ External-only (not in the 20): GCP/terraform apply, Resend key, Sentry/PostHog -
 - [x] 1 git  - [x] 2 audit  - [x] 3 e2e battery  - [x] 4 CI docker  - [x] 5 terraform
 - [x] 6 bounds  - [x] 7 sweeper  - [x] 8 reviewer  - [x] 9 adapters  - [x] 10 email  - [x] 11 sandbox
 - [x] 12 bridge-proxy  - [x] 13 load  - [x] 14 hygiene
-- [x] 15 prompt  - [x] 16 pricing+bench  - [x] 17 rules+cases  - [x] 18 enterprise  - [ ] 19 guides  - [ ] 20 release
+- [x] 15 prompt  - [x] 16 pricing+bench  - [x] 17 rules+cases  - [x] 18 enterprise  - [x] 19 guides  - [ ] 20 release
 
 ### PHASE 13 execution log (tasks 1-2)
 
@@ -452,3 +452,20 @@ Prioritized from a full Qoder feature comparison; we remain ahead on the 16-stat
   - Index: `docs/README.md` gains ENTERPRISE_SETUP in the surface chooser, Guides table, and a new "Admin / security owner" reading path.
   - **Link verification (UTF-8-aware checker): getting-started 52/52, ENTERPRISE_SETUP 42/42, docs/README 68/68 - 0 broken files/anchors.**
   - Gates: `typecheck` 0 - `lint` 0.
+
+
+### PHASE 13 execution log (task 19) - CLI/SDK/EXTENSION guide rewrites + CLI/SDK contract fixes
+
+- [x] 19 guides - benchmark section 7 rows 8/9/11 rewritten, and - because both guides documented APIs that did not work - the CLI/SDK contract bugs were fixed first, then proven green.
+  - **Root cause found by code exploration**: every CLI task command (build/run/ask/plan/fix/deploy/CI) and thus the whole CI path failed with HTTP 400 because `createTask` never sent the server-required `workspaceId`; `sessions` called a non-existent `listSessions` route (404); `revisePlan` sent plural `instructions` (zod expects `instruction`); memory/restore used wrong paths; `streamEvents` fetched only the first 200 events and hung on terminal states; GitHub annotations used a malformed `::error::file,line::msg` format; API errors surfaced as `[object Object]`.
+  - **`backend/packages/sdk/src/client.ts`**: `createTask` now requires `projectId` and auto-derives `workspaceId` via `GET /v1/projects/:id` (client-side SDKError 400 when omitted); `listSessions` -> `listTasks(workspaceId, {state?, limit?})` on `GET /v1/tasks`; `revisePlan` body singular `{instruction}`; `queryMemory`/`addMemory` -> `/v1/projects/:pid/memories` (plural, correct body, unwraps `{memories}`); `restoreCheckpoint` -> `rollbackCheckpoint` on `POST /v1/checkpoints/:id/rollback`; `streamEvents` paginates with `afterSequence` (200/page) and terminates on `COMPLETED|FAILED|CANCELLED|INTERRUPTED`; `SDKError` gains `code?` + envelope message extraction.
+  - **`backend/packages/cli/src/index.ts`**: `--project` now required for build/run/ask/plan/fix/deploy/CI (clear usage error, exit 1); `flagValue()` rejects flag-looking values; `sessions` uses `listTasks` printing `state` + `goal`; usage text documents the real 7 flags. **`backend/packages/cli/src/ci.ts`**: GitHub annotation format fixed to `::error file=src/auth.ts,line=42::msg`.
+  - **New tests**: `backend/packages/sdk/src/client.test.ts` (10/10 - workspaceId derivation, 400 without projectId, task list, revise body, memory routes, rollback route, event pagination/terminal, envelope errors) and `backend/packages/cli/src/ci.test.ts` (4/4 - GH annotation format + schema shape).
+  - **Live E2E against the running stack (api :4000)**: SDK smoke (createTask auto-derives `workspaceId=ws` + task created, listTasks, memory roundtrip, health) and CLI `health`/`status`/`sessions`/`build` (previously 400 - now exit 0, task created)/`ask` without `--project` (exit 1 + usage).
+  - **`CLI_GUIDE.md` rewritten (156 -> 476 lines / 12 links / 0 broken)** - single-page Bible: all commands with exact flags, the 7-flag table, CI mode with the exact CIResult JSON schema, GitHub annotation format, exit codes 0/1 (the nonexistent "exit 2" claim removed), permission globs, command->endpoint map, file-goal recipe, troubleshooting, 7-item FAQ.
+  - **`SDK_GUIDE.md` rewritten (206 -> 558 lines / 24 links / 0 broken)** - hub-spoke guide: config, auth-by-curl (JWT-only - apiKey not a Bearer), 31-method reference with honest return-shape notes, events semantics (afterSequence + terminal states), error/retry matrix, multi-surface quickstarts (CLI/CI/IDE/Desktop), recipes, escape-hatch table, rate limits (30 tasks/hour), concurrency/versioning, type reference, 7-item FAQ.
+  - **`EXTENSION_GUIDE.md` rewritten (257 -> 470 lines / 20 links / 0 broken)** - mechanism chooser, 10 extension types with honest wired/not-wired status, object-form manifest reference (capabilities/permissions as objects, matching ToolManifest), lifecycle + registries, "what is wired today" table, security model, 4 recipes + worked ToolExtension example + registration checklist, hook catalog, Skills/Artifacts/Routines taxonomy, publishing status, 7-item FAQ.
+  - **Cross-doc corrections**: `docs/getting-started.md` CLI/SDK sections rewritten with verified commands (required `--project`, no `-f`, `status <task-id>`, exit 0/1, SDK `token:` config, `revisePlan(taskId, planId, string)`) - 53 links/0; `docs/USE_CASES.md` 12 fixes (8 command examples gained `--project`, 2x exit-code claim, false "replaces reviewer" claim -> honest code-change wording, deploy surface line) - 34 links/0; `TOOL_GUIDE.md` manifest arrays -> objects; `PLATFORM_GUIDE.md` `apiKey:` -> `token:` + removed nonexistent `npm install -g`; sweep grep clean (no `npm install -g @ai-harness`, `exit 0/1/2`, `ah_live_`, `restoreCheckpoint`, `listSessions`, `accessToken:` left in docs).
+  - **Link verification (UTF-8-aware checker): CLI_GUIDE 476/12/0, SDK_GUIDE 558/24/0, EXTENSION_GUIDE 470/20/0, getting-started 53/0, USE_CASES 34/0 - 0 broken files/anchors** (est 500/600/500 per benchmark section 7 - estimates, not gates).
+  - Index rows confirmed in `docs/README.md` (surface chooser + Guides table).
+  - Gates: `typecheck` 0 - `lint` 0 - **full `npm test` 63 files / 590 tests (568 passed, 22 skipped) exit 0** (includes the 14 new CLI/SDK tests).

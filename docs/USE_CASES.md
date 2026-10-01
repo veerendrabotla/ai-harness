@@ -70,7 +70,7 @@ task constraints if the date code spans packages.
 **Artifacts:** repro test, minimal diff, verification results, event trail.
 **Permissions:** default plan approval; WRITE→ASK per file; first checkpoint
 before the first write.
-**Surface:** Web (task detail → plan → approve) or `aiharness fix "<goal>"`.
+**Surface:** Web (task detail → plan → approve) or `aiharness fix "<goal>" --project <id>`.
 
 ### 2. Root-cause hypothesis tree
 
@@ -92,7 +92,7 @@ modify files — deliver the ranked analysis only.
 produces no diff — that is the point).
 **Permissions:** ASK mode is read-only by mode constraint; promote to `FIX`
 with the winning hypothesis appended as `additionalGoal`.
-**Surface:** Web, CLI (`aiharness ask`), or SDK (`createTask` mode `ASK`).
+**Surface:** Web, CLI (`aiharness ask "<q>" --project <id>`), or SDK (`createTask` mode `ASK`).
 
 ### 3. Failing-test triage
 
@@ -113,7 +113,7 @@ workspace instructions (test conventions).
 **Artifacts:** green suite or an evidence report; bounded by
 `maxToolCallsPerRun` and `maxTaskDurationSeconds`.
 **Permissions:** `FIX` mode; plan approval before the first edit.
-**Surface:** CI (`aiharness test --ci --json`, exit 0/1/2) or CLI.
+**Surface:** CI (`aiharness test --ci --json --project <id>`, exit 0/1) or CLI.
 
 ## 2. Feature delivery
 
@@ -206,7 +206,7 @@ workspace instructions.
 revise to steer, reject to cancel (nothing was written).
 **Permissions:** `PLAN` mode (no execution possible); plan approval gate is
 the deliverable's home.
-**Surface:** Web, or `aiharness plan "<goal>"`.
+**Surface:** Web, or `aiharness plan "<goal>" --project <id>`.
 
 ### 8. Feature delivery with a revision round
 
@@ -314,7 +314,7 @@ production code changes.
 (test style).
 **Artifacts:** test file(s), coverage delta in the verification report.
 **Permissions:** read-mostly; WRITE→ASK limited to `tests/**`.
-**Surface:** CLI (`aiharness build "<goal>"`).
+**Surface:** CLI (`aiharness build "<goal>" --project <id>`).
 
 ### 13. Test-fix-until-green loop
 
@@ -335,7 +335,7 @@ Bounded: max 3 replans, then report remaining failures with stack evidence.
 **Artifacts:** green run or bounded failure report; replan history visible.
 **Permissions:** `FIX` mode; `maxTaskDurationSeconds` and tool-call budget
 as the hard stops; `blockOnReviewFindings: true` if reviewer vetoes count.
-**Surface:** CI (`aiharness test --ci --json --github`) or CLI.
+**Surface:** CI (`aiharness test --ci --json --github --project <id>`) or CLI.
 
 ## 6. Code review and QA
 
@@ -368,10 +368,10 @@ set), stored on the run.
 **Goal.**
 
 ```text
-aiharness review --ci --github
+aiharness review --ci --github --project <id>
 ```
 
-**Context:** PR diff in CI, exit codes 0/1/2, `--json` for machine output.
+**Context:** PR diff in CI, exit codes 0/1, `--json` for machine output.
 **Artifacts:** findings + `--github` annotations on the PR; CI job status.
 **Permissions:** read-only mode; CI token with comment scope;
 `allowDirectExecution` not required (REVIEW never writes).
@@ -409,7 +409,7 @@ after every change.
 **Goal.**
 
 ```text
-aiharness security --ci --json
+aiharness security --ci --json --project <id>
 ```
 
 **Context:** repo tree, finding taxonomy (`HARDCODED_SECRET`,
@@ -418,8 +418,8 @@ exit codes for gating.
 **Artifacts:** findings JSON, CI annotation, optional follow-up `FIX` task
 created from the report.
 **Permissions:** read-only by mode; DENY rules on write tools as belt-and-
-braces; a custom `security-agent` extension can replace the default
-reviewer (see [Extension Guide](../EXTENSION_GUIDE.md)).
+braces; swapping the default reviewer for a custom one is a code change
+today - no pluggable reviewer exists (see [Extension Guide](../EXTENSION_GUIDE.md#what-is-wired-today)).
 **Surface:** CI or CLI.
 
 ## 8. Docs and knowledge
@@ -476,7 +476,7 @@ base entries (search), hooks/events history for real incidents.
 **Goal.**
 
 ```text
-aiharness test --ci --json --github
+aiharness test --ci --json --github --project <id>
 ```
 
 **Context:** CI logs, exit codes gate the job; `--github` posts the outcome
@@ -508,7 +508,7 @@ goal and a rollback checkpoint.
 **Permissions:** EXTERNAL-class tools → ASK; environment scoping; note:
 deployment provider is preview-grade today — treat as an orchestration
 pattern, not a production guarantee.
-**Surface:** Web (`aiharness deploy`), SDK deployment API
+**Surface:** Web, CLI (`aiharness deploy preview --project <id>`), or SDK deployment API
 (create/get/list/cancel/rollback/logs).
 
 ## 10. Safety, policy, and recovery
@@ -667,7 +667,7 @@ same review/security gates as any task.
 | Interactive work, approvals by click | Web |
 | Local dev loop, scripting | CLI (`build/run/ask/plan/fix/…`) |
 | Embedding in your own product | SDK (`AiHarnessClient`) |
-| PR gating, scheduled jobs | CI (`--ci --json --github`, exit 0/1/2) |
+| PR gating, scheduled jobs | CI (`--ci --json --github`, exit 0/1) |
 | Code that must stay on your machine | Bridge (+ local provider) |
 
 **Effort guards (defaults):** plan approval on · 50 tool calls/run ·

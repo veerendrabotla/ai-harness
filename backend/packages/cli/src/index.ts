@@ -15,32 +15,47 @@ const client = new AiHarnessClient({
 const args = process.argv.slice(2);
 const command = args[0];
 
+function flagValue(name: string): string | undefined {
+  const idx = args.indexOf(name);
+  const value = idx !== -1 ? args[idx + 1] : undefined;
+  if (value === undefined || value.startsWith("--")) return undefined;
+  return value;
+}
+
 function usage() {
   console.log(`
 AI Harness CLI
 
 Usage: aiharness <command> [options]
 
-Commands:
-  build <goal> [--project <id>]    Create and run a task
-  run <prompt> [--project <id>]    Create and start a new task (build mode)
-  ask <question> [--project <id>]  Create a task in ask mode
-  plan <description> [--project <id>] Create a task in plan mode
-  review [--ci] [--project <id>]   Run code review
-  fix <goal> [--project <id>]      Create a task in fix mode
-  deploy <environment> [--project <id>] Deploy a project
-  sessions [--workspace <id>]      List recent sessions
-  resume <task-id>                 Resume a paused task
-  status <task-id>                 Show task status
-  events <task-id>                 Stream task events in real-time
-  health                           Check API health
-  test --ci [--project <id>]       Run tests in CI mode
-  security --ci [--project <id>]   Run security audit in CI mode
+Commands (task commands require --project):
+  build <goal> --project <id>     Create and run a task
+  run <prompt> --project <id>     Create and start a new task (build mode)
+  ask <question> --project <id>   Create a task in ask mode
+  plan <description> --project <id> Create a task in plan mode
+  review --ci --project <id>      Run code review (CI mode)
+  fix <goal> --project <id>       Create a task in fix mode
+  deploy <environment> --project <id> [--provider <name>]  Deploy a project
+  sessions --workspace <id>       List tasks (sessions) in a workspace
+  resume <task-id>                Resume a paused task
+  status <task-id>                Show task status
+  events <task-id>                Stream task events in real-time
+  health                          Check API health
+  test --ci --project <id>        Run tests in CI mode
+  security --ci --project <id>    Run security audit in CI mode
+
+Flags:
+  --project <id>   Project UUID (required for task and CI commands)
+  --workspace <id> Workspace UUID (sessions)
+  --provider <id>  Deployment provider (deploy, default: default)
+  --ci             CI mode (review/test/security)
+  --json           JSON output (CI mode; wins over --github)
+  --github         GitHub Actions annotations (CI mode)
 
 Environment:
   AI_HARNESS_URL        API base URL (default: http://localhost:4000)
-  AI_HARNESS_API_KEY    API key for authentication
-  AI_HARNESS_TOKEN      JWT token for authentication
+  AI_HARNESS_TOKEN      JWT access token (from POST /v1/auth/login)
+  AI_HARNESS_API_KEY    Passed as Bearer if set (see CLI guide: API keys are not accepted as Bearer today)
 `);
 }
 
@@ -55,10 +70,10 @@ async function main() {
       case "build": {
         const goal = args[1];
         if (!goal) { console.error("Usage: aiharness build <goal> [--project <id>]"); process.exit(1); }
-        const projectIdx = args.indexOf("--project");
-        const projectId = projectIdx !== -1 ? args[projectIdx + 1] : undefined;
+        const projectId = flagValue("--project");
+        if (!projectId) { console.error("Usage: aiharness <command> <text> --project <id>"); process.exit(1); }
         console.log(`Creating task: ${goal}`);
-        const task = await client.createTask({ goal, agentMode: "BUILD", ...(projectId ? { projectId } : {}) });
+        const task = await client.createTask({ goal, agentMode: "BUILD", projectId });
         console.log(`Task created: ${task.id}`);
         console.log(`State: ${task.state}`);
         console.log(`\nStream events: aiharness status ${task.id}`);
@@ -67,10 +82,10 @@ async function main() {
       case "run": {
         const prompt = args[1];
         if (!prompt) { console.error("Usage: aiharness run <prompt> [--project <id>]"); process.exit(1); }
-        const projectIdx = args.indexOf("--project");
-        const projectId = projectIdx !== -1 ? args[projectIdx + 1] : undefined;
+        const projectId = flagValue("--project");
+        if (!projectId) { console.error("Usage: aiharness <command> <text> --project <id>"); process.exit(1); }
         console.log(`Creating task: ${prompt}`);
-        const task = await client.createTask({ goal: prompt, agentMode: "BUILD", ...(projectId ? { projectId } : {}) });
+        const task = await client.createTask({ goal: prompt, agentMode: "BUILD", projectId });
         console.log(`Task created: ${task.id}`);
         console.log(`State: ${task.state}`);
         console.log(`\nStream events: aiharness status ${task.id}`);
@@ -79,10 +94,10 @@ async function main() {
       case "ask": {
         const question = args[1];
         if (!question) { console.error("Usage: aiharness ask <question> [--project <id>]"); process.exit(1); }
-        const projectIdx = args.indexOf("--project");
-        const projectId = projectIdx !== -1 ? args[projectIdx + 1] : undefined;
+        const projectId = flagValue("--project");
+        if (!projectId) { console.error("Usage: aiharness <command> <text> --project <id>"); process.exit(1); }
         console.log(`Creating task: ${question}`);
-        const task = await client.createTask({ goal: question, agentMode: "ASK", ...(projectId ? { projectId } : {}) });
+        const task = await client.createTask({ goal: question, agentMode: "ASK", projectId });
         console.log(`Task created: ${task.id}`);
         console.log(`State: ${task.state}`);
         console.log(`\nStream events: aiharness status ${task.id}`);
@@ -91,10 +106,10 @@ async function main() {
       case "plan": {
         const description = args[1];
         if (!description) { console.error("Usage: aiharness plan <description> [--project <id>]"); process.exit(1); }
-        const projectIdx = args.indexOf("--project");
-        const projectId = projectIdx !== -1 ? args[projectIdx + 1] : undefined;
+        const projectId = flagValue("--project");
+        if (!projectId) { console.error("Usage: aiharness <command> <text> --project <id>"); process.exit(1); }
         console.log(`Creating task: ${description}`);
-        const task = await client.createTask({ goal: description, agentMode: "PLAN", ...(projectId ? { projectId } : {}) });
+        const task = await client.createTask({ goal: description, agentMode: "PLAN", projectId });
         console.log(`Task created: ${task.id}`);
         console.log(`State: ${task.state}`);
         console.log(`\nStream events: aiharness status ${task.id}`);
@@ -103,10 +118,10 @@ async function main() {
       case "fix": {
         const goal = args[1];
         if (!goal) { console.error("Usage: aiharness fix <goal> [--project <id>]"); process.exit(1); }
-        const projectIdx = args.indexOf("--project");
-        const projectId = projectIdx !== -1 ? args[projectIdx + 1] : undefined;
+        const projectId = flagValue("--project");
+        if (!projectId) { console.error("Usage: aiharness <command> <text> --project <id>"); process.exit(1); }
         console.log(`Creating task: ${goal}`);
-        const task = await client.createTask({ goal, agentMode: "FIX", ...(projectId ? { projectId } : {}) });
+        const task = await client.createTask({ goal, agentMode: "FIX", projectId });
         console.log(`Task created: ${task.id}`);
         console.log(`State: ${task.state}`);
         console.log(`\nStream events: aiharness status ${task.id}`);
@@ -114,14 +129,12 @@ async function main() {
       }
       case "deploy": {
         const environment = args[1];
-        if (!environment) { console.error("Usage: aiharness deploy <environment> --provider <name> [--project <id>]"); process.exit(1); }
-        const projectIdx = args.indexOf("--project");
-        const projectId = projectIdx !== -1 ? args[projectIdx + 1] : undefined;
+        if (!environment) { console.error("Usage: aiharness deploy <environment> --project <id> [--provider <name>]"); process.exit(1); }
+        const projectId = flagValue("--project");
         if (!projectId) { console.error("Usage: aiharness deploy <environment> --project <id>"); process.exit(1); }
-        const providerIdx = args.indexOf("--provider");
-        const provider = providerIdx !== -1 ? args[providerIdx + 1] : "default";
+        const provider = flagValue("--provider") ?? "default";
         console.log(`Deploying to ${environment} via ${provider}...`);
-        const deployment = await client.createDeployment(projectId, { provider: provider ?? "default", environment });
+        const deployment = await client.createDeployment(projectId, { provider, environment });
         console.log(`Deployment created: ${deployment.deploymentId}`);
         console.log(`Status: ${deployment.status}`);
         break;
@@ -146,18 +159,17 @@ async function main() {
         break;
       }
       case "sessions": {
-        const wsIdx = args.indexOf("--workspace");
-        const workspaceId = wsIdx !== -1 ? args[wsIdx + 1] : "";
+        const workspaceId = flagValue("--workspace");
         if (!workspaceId) {
           console.error("Usage: aiharness sessions --workspace <id>");
           process.exit(1);
         }
-        const sessions = await client.listSessions(workspaceId);
+        const sessions = await client.listTasks(workspaceId);
         if (sessions.length === 0) {
           console.log("No sessions found.");
         } else {
           for (const s of sessions) {
-            console.log(`  ${s.id}  ${s.status.padEnd(10)}  ${s.title ?? "(untitled)"}  ${new Date(s.createdAt).toLocaleString()}`);
+            console.log(`  ${s.id}  ${s.state.padEnd(22)}  ${s.goal ?? "(untitled)"}  ${new Date(s.createdAt).toLocaleString()}`);
           }
         }
         break;
@@ -186,8 +198,7 @@ async function main() {
       }
       case "review": {
         if (args.includes("--ci")) {
-          const projectIdx = args.indexOf("--project");
-          const projectId = projectIdx !== -1 ? args[projectIdx + 1] : "";
+          const projectId = flagValue("--project");
           if (!projectId) {
             console.error("Usage: aiharness review --ci --project <id>");
             process.exit(1);
@@ -210,8 +221,7 @@ async function main() {
       case "test":
       case "security": {
         if (args.includes("--ci")) {
-          const projectIdx = args.indexOf("--project");
-          const projectId = projectIdx !== -1 ? args[projectIdx + 1] : "";
+          const projectId = flagValue("--project");
           if (!projectId) {
             console.error(`Usage: aiharness ${command} --ci --project <id>`);
             process.exit(1);

@@ -169,21 +169,20 @@ import { AiHarnessClient } from "@ai-harness/sdk";
 
 const client = new AiHarnessClient({
   baseUrl: "http://localhost:4000",
-  apiKey: "ah_live_...",
+  token: "<jwt from POST /v1/auth/login>",   // 15-minute TTL
 });
 
 const task = await client.createTask({
   goal: "Build a REST API",
-  projectId: "proj_123",
+  projectId: "9bc32d2b-…",     // required; workspaceId is derived from it
 });
 ```
 
 ### CLI
 
 ```bash
-npm install -g @ai-harness/cli
-
-aiharness build "Add user authentication"
+# workspace-private package: runs from the repo (bin linked by npm install)
+aiharness build "Add user authentication" --project <id>
 aiharness status <task-id>
 aiharness health
 ```

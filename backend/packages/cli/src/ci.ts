@@ -94,7 +94,7 @@ export function formatCIResult(result: CIResult, format: CIConfig["outputFormat"
     const lines: string[] = [];
     for (const issue of result.issues) {
       const level = issue.severity === "error" ? "error" : issue.severity === "warning" ? "warning" : "notice";
-      const location = issue.file ? `::${issue.file}${issue.line ? `,line=${issue.line}` : ""}` : "";
+      const location = issue.file ? ` file=${issue.file}${issue.line ? `,line=${issue.line}` : ""}` : "";
       lines.push(`::${level}${location}::${issue.message}`);
     }
     return lines.join("\n");
