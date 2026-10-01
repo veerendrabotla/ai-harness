@@ -1,2 +1,0 @@
--- This is an empty migration file that marks the agent_mode migration as applied
--- The actual SQL was applied directly to the database
