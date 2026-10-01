@@ -1,6 +1,6 @@
 ﻿# Implementation Status
 
-Honest per-subsystem state after the initial foundation build.
+Honest per-subsystem state, updated through PHASE 13 (last refreshed 2026-10-01).
 
 Legend: ✅ COMPLETED · 🟡 PARTIALLY IMPLEMENTED · ⛔ NOT YET IMPLEMENTED
 
@@ -8,7 +8,7 @@ Legend: ✅ COMPLETED · 🟡 PARTIALLY IMPLEMENTED · ⛔ NOT YET IMPLEMENTED
 - ✅ Monorepo (npm workspaces): frontend, apps/api, apps/worker, 9 backend packages
 - ✅ Strict TypeScript across backend; `tsc --noEmit` green
 - ✅ ESLint flat config (backend incl. `no-explicit-any: error`) + Next config (frontend)
-- ✅ Vitest configured; 56 tests green across 9 files
+- ✅ Vitest suite: 590 tests across 63 files green (unit + integration; `RUN_INTEGRATION=1` adds live-server suites)
 - ✅ docker-compose (postgres 17.4 + redis 7.4) with healthchecks + shadow DB
 - ✅ `.env.example` fully categorized; startup env validation fails fast
 
@@ -18,7 +18,7 @@ Legend: ✅ COMPLETED · 🟡 PARTIALLY IMPLEMENTED · ⛔ NOT YET IMPLEMENTED
 - ✅ Refresh reuse detection → revoke all sessions
 - ✅ Password reset tokens (hashed, single-use, 30 min TTL); email delivery deferred
 - ✅ Membership + role checks on every workspace-scoped route (OWNER/MEMBER/VIEWER)
-- ✅ Rate limits per BACKEND_STRUCTURE §7 (login/signup/reset IP-based; task creation user-based; approval decisions 120/min/user)
+- ✅ Rate limits per BACKEND_STRUCTURE §7 (login/signup/reset IP-based; task creation user-based; approval decisions 120/min/user); production Redis limiter awaits a ready/error handshake before ping (PHASE 12 fix); `RATE_LIMIT_GLOBAL_MAX` overridable
 
 ## Workspaces / projects
 - ✅ Workspace CRUD + archive/restore + default policy creation + audit trail
@@ -55,7 +55,7 @@ Legend: ✅ COMPLETED · 🟡 PARTIALLY IMPLEMENTED · ⛔ NOT YET IMPLEMENTED
 - 🟡 Executors: Local Bridge filesystem/terminal/git/checkpoint tools fully working via the gateway + reference agent (E2E verified); CLOUD_SANDBOX returns structured unavailable
 
 ## MCP
-- ✅ MCP registry CRUD (encrypted configs) + discovery on enable + HTTP/SSE proxy through the permission gate; STDIO unsupported by design (D16).
+- ✅ MCP registry CRUD (encrypted configs) + discovery on enable + HTTP/SSE proxy through the permission gate; STDIO transport via a connected bridge (E2E: fake server ACTIVE with discovered tool).
 
 ## Bridges
 - ✅ Full pairing lifecycle + WebSocket gateway (device-token auth, presence sweep DEGRADED→DISCONNECTED with project auto-UNAVAILABLE) + reference TS agent executing real tools. Go bridge swap-in documented in DECISIONS D15.
@@ -74,17 +74,30 @@ Legend: ✅ COMPLETED · 🟡 PARTIALLY IMPLEMENTED · ⛔ NOT YET IMPLEMENTED
 - ✅ PWA: Serwist service worker, webmanifest, icons, installable; honest offline behavior (no fake offline agents)
 - ✅ Auth store: access token memory-only; refresh via httpOnly cookie; silent refresh + retry on 401
 - ✅ Realtime: Socket.IO subscription w/ membership-checked rooms; polling fallback + afterSequence replay
-- 🟡 Diff viewer renders unified diffs (custom renderer); Monaco swap-in pending
+- 🟡 Diff viewer: Monaco DiffEditor swapped in behind the light renderer
 - 🟡 Toast system minimal; critical errors render inline (guideline-compliant)
 
 ## Observability
 - ✅ Request IDs on every response; pino logging with redaction paths; sanitize helper for payloads
 - ✅ Traceability: requestId → taskId/runId → MODEL_INVOCATION_RECORDED (provider/model/stage/usage/timestamps FR-016) → TOOL_* events → outcomes
 - ✅ Audit log for security-relevant actions
-- 🟡 Env plumbing for Sentry exists; SDK init pending (P3)
+- ✅ Monaco DiffEditor swap-in behind the light renderer; PostHog/Sentry env-guarded init (accounts external)
 
 ## Deployment
-- 🟡 Dockerfiles (api/worker/gateway/frontend standalone) + GitHub Actions CI (typecheck/lint/unit/build/images). Terraform + deploy stages pending.
+- ✅ Dockerfiles (api/worker/gateway/frontend) running esbuild bundles; first-run path proven (`docker compose up -d --build` → all 7 services healthy, healthz `database:up`, signup/login through the container)
+- ✅ GitHub Actions CI: lint, typecheck, unit tests, builds, security, `docker` (manifests `--check` → compose build → health poll → migrate exit → teardown), `terraform` (fmt -check → init → validate)
+- ✅ Terraform GCP stack validated (1.11.4 fmt/init/validate green; `csrf_secret` + `TF_VAR_csrf_secret` wired); GCP apply external-only (EXTERNAL_DEPLOYMENT_CHECKLIST)
+
+## PHASE 12–13 additions (2026-10-01)
+- ✅ Docker distribution path: `scripts/setup-env.mjs` one-command `.env` bootstrap, `env_file` + healthcheck wiring, 56 manifest COPY blocks regenerated (`gen-docker-manifests.mjs --check`), nested workspace `node_modules` seeded, `prisma generate` in images
+- ✅ Fixed guaranteed failures: rate-limit production Redis false-negative (ready/error handshake), `CSRF_SECRET` end-to-end (env + setup-env + Terraform + deploy.yml), ESM `require` logger in auth-service, queue metrics reading a prefix that never existed
+- ✅ Preview panel: remote previews stream through the Local Bridge (`POST /bridge/proxy`, HMAC proxy tickets, loopback-only guard, HTML/CSS subresource rewriting) — last code TODOs removed
+- ✅ Verification-gap closures: execution-loop bounds (7/7), stuck-run sweeper (unit + `e2e:sweep`), reviewer gate (4/4 on the real loop), Google/Ollama wire contracts (8/8 vs mocks), password-reset email E2E (20/20), Docker sandbox real-task run (`e2e:agent` in `node:22`)
+- ✅ Full E2E battery green: `e2e:smoke` 14/14, `e2e:agent` (Ollama), `e2e:bridge`, `e2e:resilience`, `e2e:replicas`, `e2e:browser` 37 passed — plus 6 root-cause fixes it flushed out (state-machine edge, planner rules, orchestrator fallback, middleware PUBLIC_ROUTES, lockfile platform entries, image pruning)
+- ✅ Multi-instance local load test: k6 gate run `EXIT=0` at 50 rps, p95 199ms, 0% errors, 50.5/49.5 split (`backend/load-tests/multi-instance-report.md`); ceiling between 50 and 75 rps (argon2-bound)
+- ✅ Worker hygiene: queue-job retention auto-clean + `queue_jobs` Prometheus/admin gauges incl. `failed`; fixed admin stats reading a never-existing queue prefix
+- ✅ CLI/SDK contract fixes: `createTask` derives `workspaceId` (all CLI task/CI commands previously 400'd), `listTasks`, singular `revisePlan`, memory/rollback routes, event streaming paginates to terminal states, GitHub annotation format, envelope error messages — live-verified against the Docker stack + 14 new tests
+- ✅ Docs coverage: PROMPT_GUIDE, MODELS_AND_PRICING, BENCHMARKS, RULES_AND_INSTRUCTIONS, USE_CASES, ENTERPRISE_SETUP new; getting-started 139→579; CLI/SDK/EXTENSION guides rewritten (476/558/470); CHANGELOG v0.1.0; llms.txt lists every doc
 
 ## Final completion pass (this revision)
 - ✅ Prompt-injection defenses (fenced untrusted context, tag neutralization) with tests

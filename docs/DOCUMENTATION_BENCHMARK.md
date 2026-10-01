@@ -167,37 +167,39 @@
 
 ## 7. Plan — What to Build
 
+> **Status tracker (updated 2026-10-01):** ✅ shipped · 🟡 partial · ❌ not built. All 17 items below carry live status; verification evidence in `TODO_NEXT_PHASE.md` (PHASE 13 execution log).
+
 ### New docs (7 files)
 
-| # | Doc File | Source Inspiration | Lines Est. |
-|---|----------|:------------------:|-----------:|
-| 1 | `docs/GETTING_STARTED.md` | Cursor quickstart + Cline 4-path matrix + Replit journey | 600 |
-| 2 | `docs/PROMPT_GUIDE.md` | Copilot 6 rules + Claude prompt library | 500 |
-| 3 | `docs/MODELS_AND_PRICING.md` | Cursor per-model + Copilot AI credits | 400 |
-| 4 | `docs/RULES_AND_INSTRUCTIONS.md` | Cursor rules matrix + Cline customization | 500 |
-| 5 | `docs/TROUBLESHOOTING.md` | Cline `doctor` + Claude `/doctor` + Devin common issues | 600 |
-| 6 | `docs/USE_CASES.md` | Replit 26 workflows + Lovable 12 verticals | 700 |
-| 7 | `docs/BENCHMARKS.md` | Aider leaderboards (unique) | 400 |
+| # | Doc File | Source Inspiration | Lines Est. | Status |
+|---|----------|:------------------:|-----------:|:------:|
+| 1 | `docs/GETTING_STARTED.md` | Cursor quickstart + Cline 4-path matrix + Replit journey | 600 | ✅ shipped as `docs/getting-started.md` (579 lines) |
+| 2 | `docs/PROMPT_GUIDE.md` | Copilot 6 rules + Claude prompt library | 500 | ✅ shipped |
+| 3 | `docs/MODELS_AND_PRICING.md` | Cursor per-model + Copilot AI credits | 400 | ✅ shipped |
+| 4 | `docs/RULES_AND_INSTRUCTIONS.md` | Cursor rules matrix + Cline customization | 500 | ✅ shipped |
+| 5 | `docs/TROUBLESHOOTING.md` | Cline `doctor` + Claude `/doctor` + Devin common issues | 600 | ✅ shipped (kept pre-existing `docs/troubleshooting.md` name — no churn) |
+| 6 | `docs/USE_CASES.md` | Replit 26 workflows + Lovable 12 verticals | 700 | ✅ shipped (699 lines, 26 entries) |
+| 7 | `docs/BENCHMARKS.md` | Aider leaderboards (unique) | 400 | ✅ shipped |
 
 ### Rewrites / Major expands (7 files)
 
-| # | Doc File | Scope | Lines Now → After |
-|---|----------|:-----:|------------------:|
-| 8 | `CLI_GUIDE.md` | Single-page CLI Bible + JSON schema + permissions globs | 156 → 500 |
-| 9 | `SDK_GUIDE.md` | Hub-spoke arch + multi-surface quickstart + recipes | 206 → 600 |
-| 10 | `SECURITY.md` | + governance/compliance (Codex) + enterprise matrix (Devin) | 247 → 500 |
-| 11 | `EXTENSION_GUIDE.md` | + Skills vs Artifacts vs Routines taxonomy (Claude vs Devin vs Lovable) | 257 → 500 |
-| 12 | `docs/API.md` | + provider matrix + billing vocabulary + per-tool tabs | 307 → 600 |
-| 13 | `docs/ENTERPRISE_SETUP.md` | New: SSO/SCIM/deployment/compliance (from SECURITY.md + Codex/Devin) | 0 → 500 |
-| 14 | `CHANGELOG.md` | Weekly digests, versioned, feature maturity badges | 0 → 400 |
+| # | Doc File | Scope | Lines Now → After | Status |
+|---|----------|:-----:|------------------:|:------:|
+| 8 | `CLI_GUIDE.md` | Single-page CLI Bible + JSON schema + permissions globs | 156 → 500 | ✅ 476 lines |
+| 9 | `SDK_GUIDE.md` | Hub-spoke arch + multi-surface quickstart + recipes | 206 → 600 | ✅ 558 lines |
+| 10 | `SECURITY.md` | + governance/compliance (Codex) + enterprise matrix (Devin) | 247 → 500 | 🟡 governance/compliance delivered in `docs/ENTERPRISE_SETUP.md` (472) instead; SECURITY deep-dive expansion deferred |
+| 11 | `EXTENSION_GUIDE.md` | + Skills vs Artifacts vs Routines taxonomy (Claude vs Devin vs Lovable) | 257 → 500 | ✅ 470 lines incl. taxonomy |
+| 12 | `docs/API.md` | + provider matrix + billing vocabulary + per-tool tabs | 307 → 600 | 🟡 351 lines; provider-matrix/billing/per-tool tabs not expanded |
+| 13 | `docs/ENTERPRISE_SETUP.md` | New: SSO/SCIM/deployment/compliance (from SECURITY.md + Codex/Devin) | 0 → 500 | ✅ 472 lines |
+| 14 | `CHANGELOG.md` | Weekly digests, versioned, feature maturity badges | 0 → 400 | ✅ v0.1.0 entry (dated 2026-10-01); weekly digests start with the first release |
 
 ### Upgrades for discoverability (3 files)
 
-| # | Doc File | Source | Lines Est. |
-|---|----------|:------:|-----------:|
-| 15 | `llms.txt` (root) | Cline/Claude pattern | 80 |
-| 16 | `llms-full.txt` (root, generated list) | Cline/Claude | 20 (index) |
-| 17 | `.well-known/` entries (`mcp/server-card.json`, `agent-card.json`) | Cline | 40 |
+| # | Doc File | Source | Lines Est. | Status |
+|---|----------|:------:|-----------:|:------:|
+| 15 | `llms.txt` (root) | Cline/Claude pattern | 80 | ✅ 51 lines, lists all 42 docs (0 dangling) |
+| 16 | `llms-full.txt` (root, generated list) | Cline/Claude | 20 (index) | ✅ full concatenation of all 42 docs (14,378 lines), `npm run docs:llms-full` + `--check` |
+| 17 | `.well-known/` entries (`mcp/server-card.json`, `agent-card.json`) | Cline | 40 | ❌ deliberately not shipped: no consumer yet, and an MCP server-card would misrepresent the platform (AI Harness is an MCP *client/proxy*, not a server); revisit when a registry integration exists |
 
 ### Existing docs kept (no churn)
 

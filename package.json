@@ -27,6 +27,7 @@
     "typecheck": "tsc -p tsconfig.check.json",
     "lint": "eslint .",
     "lint:frontend": "npm -w frontend run lint",
+    "docs:llms-full": "node scripts/gen-llms-full.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e:agent": "tsx scripts/e2e-agent-run.ts",

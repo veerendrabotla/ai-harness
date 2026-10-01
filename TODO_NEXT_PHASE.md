@@ -260,7 +260,7 @@ Verification evidence:
 
 ---
 
-## PHASE 13 - Next-20 task plan - ?? PLANNED
+## PHASE 13 - Next-20 task plan - DONE (all 20 tasks, 2026-10-01)
 
 ### Foundation
 1. Initial git commit + rename branch `master`->`main` (CI/deploy trigger on `main`); .gitignore audit (`.env`/`node_modules`/`dist`/`.next` verified ignored).
@@ -296,7 +296,7 @@ External-only (not in the 20): GCP/terraform apply, Resend key, Sentry/PostHog -
 - [x] 1 git  - [x] 2 audit  - [x] 3 e2e battery  - [x] 4 CI docker  - [x] 5 terraform
 - [x] 6 bounds  - [x] 7 sweeper  - [x] 8 reviewer  - [x] 9 adapters  - [x] 10 email  - [x] 11 sandbox
 - [x] 12 bridge-proxy  - [x] 13 load  - [x] 14 hygiene
-- [x] 15 prompt  - [x] 16 pricing+bench  - [x] 17 rules+cases  - [x] 18 enterprise  - [x] 19 guides  - [ ] 20 release
+- [x] 15 prompt  - [x] 16 pricing+bench  - [x] 17 rules+cases  - [x] 18 enterprise  - [x] 19 guides  - [x] 20 release
 
 ### PHASE 13 execution log (tasks 1-2)
 
@@ -469,3 +469,14 @@ Prioritized from a full Qoder feature comparison; we remain ahead on the 16-stat
   - **Link verification (UTF-8-aware checker): CLI_GUIDE 476/12/0, SDK_GUIDE 558/24/0, EXTENSION_GUIDE 470/20/0, getting-started 53/0, USE_CASES 34/0 - 0 broken files/anchors** (est 500/600/500 per benchmark section 7 - estimates, not gates).
   - Index rows confirmed in `docs/README.md` (surface chooser + Guides table).
   - Gates: `typecheck` 0 - `lint` 0 - **full `npm test` 63 files / 590 tests (568 passed, 22 skipped) exit 0** (includes the 14 new CLI/SDK tests).
+
+### PHASE 13 execution log (task 20) - release prep: CHANGELOG, audits, benchmark tracker
+
+- [x] 20 release - the four deliverables of the release-prep line, plus the two buildable discoverability items so the tracker could honestly say shipped.
+  - **CHANGELOG v0.1.0** (111 -> 130 lines): dated 2026-10-01 (no git tag existed - this is the first cut); added the PHASE 12/13 material the entry was missing - Docker bootstrap (`setup-env.mjs`, team quickstart), CI `docker`/`terraform` jobs + validated stack, a new "Preview, operations and load" group (bridge proxy, queue hygiene, k6 multi-instance, the six new docs + three rewrites), a new **Fixed** section (rate-limit production Redis handshake, `CSRF_SECRET` end-to-end, image contents, six E2E-battery root causes, ESM logger + adapter error codes, the CLI/SDK contract fixes, `npm audit` 11 -> 4), and a Security bullet for the loopback-only preview proxy with HMAC tickets.
+  - **FINAL_GAP_AUDIT** refreshed: **8 Cat-2 rows -> Cat 1** with direct evidence (password-reset `e2e:reset` 20/20; Google+Ollama wire-contract 8/8; bounds 7/7; sweeper unit 4/4 + `e2e:sweep`; reviewer gate 4/4; Docker sandbox `e2e:agent` in `node:22`; Dockerfiles compose-build/boot + CI `docker` job); deploy workflow Cat 2 -> **5** (externally blocked only, fmt/validate green + `TF_VAR_csrf_secret` wired); header last-refreshed line; summary recount **machine-verified against the tables: Cat 1: 52 / Cat 2: 0 / Cat 3: 0 / Cat 4: 0 / Cat 5: 4 (56 rows)**; closed-bullets added for the PHASE 12 rate-limit + CSRF root-cause fixes.
+  - **IMPLEMENTATION_STATUS** refreshed: stale claims corrected (56 tests/9 files -> **590/63**; MCP "STDIO unsupported" -> bridge E2E proven; Monaco "pending" -> swapped in; Sentry "init pending" -> env-guarded init; Deployment section split into 3 green rows) + new **PHASE 12-13 additions** section (9 bullets: distribution path, guaranteed-failure fixes, preview proxy, six verification closures, E2E battery + root causes, load test, worker hygiene, CLI/SDK fixes, docs coverage).
+  - **Benchmark 17-gap tracker**: `docs/DOCUMENTATION_BENCHMARK.md` section 7 tables now carry a **Status column** (updated 2026-10-01) - **14 shipped / 2 partial / 1 not built**: SECURITY deep-dive delivered via ENTERPRISE_SETUP instead of editing SECURITY.md (247 unchanged); API.md partial (351; provider-matrix/billing tabs deferred); `.well-known/` cards deliberately not shipped (no consumer; an MCP server-card would misrepresent the platform - AI Harness is an MCP client/proxy, not a server).
+  - **Discoverability items built**: `llms-full.txt` generated (**42 docs / 14,378 lines**) by new `scripts/gen-llms-full.mjs` (`npm run docs:llms-full`, `--check` drift gate mirrors the manifest-generator pattern); `llms.txt` completed - now lists **all 42 docs** (verified file-list vs link-set: 42/42, 0 dangling) with a pointer to llms-full.
+  - **Section 9 verification**: found and fixed a root-path bug in the link checker (`Join-Path` on an empty dir silently skipped every link in root-level files) and re-ran it across **all 42 markdown files + llms.txt -> 43 sources, 0 broken files/anchors** (retroactively re-validating CLI/SDK/EXTENSION whose earlier counts came from the buggy run). Word sanity: 11,018 markdown lines (docs 7,730 + root 3,288).
+  - Gates: `typecheck` 0 - `lint` 0 - **full `npm test` 63 files / 590 tests (568 passed, 22 skipped) EXIT 0**.
