@@ -43,8 +43,22 @@ async function api(path: string, options: RequestInit = {}): Promise<ApiEnvelope
   return json.data ?? json;
 }
 
-describe("Real Acceptance Test", () => {
+let serverAvailable = false;
+// Probed at module load (collection time): describe.skipIf conditions are
+// evaluated during collection, before beforeAll hooks would ever run.
+try {
+  const health = await fetch(`${API_URL}/v1/health`);
+  serverAvailable = health.ok;
+} catch {
+  serverAvailable = false;
+}
+
+const d = describe.skipIf(!serverAvailable);
+
+d("Real Acceptance Test", () => {
   beforeAll(async () => {
+    if (!serverAvailable) return;
+
     const user = await api("/v1/auth/signup", {
       method: "POST",
       body: JSON.stringify({

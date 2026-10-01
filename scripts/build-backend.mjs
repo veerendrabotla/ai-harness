@@ -48,7 +48,10 @@ for (const t of only ? targets.filter((x) => x.out.includes(only)) : targets) {
     logLevel: "info",
     banner: {
       // CJS deps (prisma engines, argon2) call require() at runtime inside ESM output.
-      js: 'import { createRequire } from "module"; const require = createRequire(import.meta.url);',
+      // The injected bindings use __ prefixes: source files legitimately import
+      // createRequire too (auth-service.ts) and a bare banner name would collide
+      // as a duplicate top-level identifier in the ESM output (boot SyntaxError).
+      js: 'import { createRequire as __banner_createRequire } from "module"; const require = __banner_createRequire(import.meta.url);',
     },
   });
 }

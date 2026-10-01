@@ -104,7 +104,8 @@ describe("SandboxEngine", () => {
     it("should execute commands in a specific directory", async () => {
       const sandbox = await engine.createSandbox({ name: "test" });
       await engine.writeFile(sandbox.id, "sub/file.txt", "content");
-      const result = await engine.execute(sandbox.id, "type file.txt", { cwd: "sub" });
+      const read = process.platform === "win32" ? "type file.txt" : "cat file.txt";
+      const result = await engine.execute(sandbox.id, read, { cwd: "sub" });
       expect(result.stdout).toContain("content");
     });
   });

@@ -133,7 +133,14 @@ jobs:
       - name: Build images
         run: docker compose build
       - name: Boot stack
-        run: docker compose up -d
+        run: |
+          docker compose up -d || {
+            echo "::group::Compose state after failed boot"
+            docker compose ps -a
+            docker compose logs --tail 200 api migrate worker gateway frontend
+            echo "::endgroup::"
+            exit 1
+          }
       - name: Wait for API + frontend health
         run: |
           set -euo pipefail
