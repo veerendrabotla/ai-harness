@@ -217,7 +217,12 @@ export class WikiMaintainer {
     const facts = await this.deps.getRunFacts(input.taskId, input.runId, input.payload);
     if (!facts) return null;
 
-    const existing = await this.deps.readWiki(w, WIKI_CHANGELOG_PATH);
+    // Only read the changelog when the presence listing shows it — a first-run
+    // read would otherwise log a harness-level "tool execution failed" for ENOENT.
+    const changelogName = WIKI_CHANGELOG_PATH.split("/").pop() ?? "";
+    const existing = present.includes(changelogName)
+      ? await this.deps.readWiki(w, WIKI_CHANGELOG_PATH)
+      : null;
     const merged = mergeChangelog(existing, buildRunEntry(facts));
 
     let pages: string[] = [];
@@ -226,11 +231,17 @@ export class WikiMaintainer {
     } catch {
       pages = [];
     }
-    const recentRuns = await this.deps.getRecentRuns(input.projectId);
+    let recentRuns: WikiRecentRun[] = [];
+    try {
+      recentRuns = await this.deps.getRecentRuns(input.projectId);
+    } catch (err) {
+      // Enrichment only: a flaky DB read must not prevent the index from refreshing.
+      this.logger.warn({ err, projectId: input.projectId }, "wiki recent-runs query failed");
+    }
 
     const written: string[] = [];
     if (merged !== existing) {
-      await this.deps.writeWiki(w, WIKI_CHANGELOG_PATH, merged);
+      await this.writeWithRetry(w, WIKI_CHANGELOG_PATH, merged);
       written.push(WIKI_CHANGELOG_PATH);
     }
     const index = buildIndex({
@@ -240,9 +251,25 @@ export class WikiMaintainer {
       lastRunId: input.runId,
       lastRunAt: facts.completedAt,
     });
-    await this.deps.writeWiki(w, WIKI_INDEX_PATH, index);
+    await this.writeWithRetry(w, WIKI_INDEX_PATH, index);
     written.push(WIKI_INDEX_PATH);
     return written;
+  }
+
+  /**
+   * Maintenance writes run from a lifecycle hook on a loaded machine — a single
+   * sandbox/bridge write can exceed the tool's 30s timeout while the executor
+   * is still spinning up. One retry after a short pause keeps the hook
+   * best-effort without ever failing the run.
+   */
+  private async writeWithRetry(w: WikiRoot, path: string, content: string): Promise<void> {
+    try {
+      await this.deps.writeWiki(w, path, content);
+    } catch (first) {
+      this.logger.warn({ err: first, path }, "wiki write failed; retrying once");
+      await new Promise((resolve) => setTimeout(resolve, 1_500));
+      await this.deps.writeWiki(w, path, content);
+    }
   }
 }
 

@@ -4154,7 +4154,7 @@ Prioritized from a full Qoder feature comparison; we remain ahead on the 16-stat
   - **Sandbox write fix** (`backend/apps/worker/src/sandbox.ts`): write case now `mkdir -p "$(dirname ...)"` before `cp` — nested first-writes on CLOUD_SANDBOX previously failed on fresh directories.
   - **Tests**: new `wiki-maintainer.test.ts` **23/23** (hostile-goal flattening, marker idempotency, 50-entry cap, index ownership/TOC/recent-runs, presence-gated skip, write-failure logging, extract helpers) + `permission-engine/src/evaluate.test.ts` **+7 zone tests** (zone allow, rule precedence, env escalation, traversal, prefix, non-write tools) — all green. Three test-side bugs found and fixed during bring-up: the fake `listWiki` now mirrors `ls` semantics (immediate children incl. directory names — the old filter dropped directories so presence detection never fired), the cap-test loop bound (`MAX+15` so `run-65` actually exists), and the hostile-goal assertion checks line-starts rather than substrings.
   - **Docs**: new **`docs/guides/wiki.md`** (layout/ownership, maintenance flow diagram, zone guardrails table, seeding recipes A/B, changelog/index examples, troubleshooting, 6-item FAQ); stale-claim corrections — `hooks-and-events.md` "no production handlers" → wiki subscriber + table extended to **all 11 hooks firing** with payloads/line refs (`beforeComplete` :915, `afterComplete` :930, `onReplan` :1521, `onError` :1635) and the "Declared but never fired" section removed; `EXTENSION_GUIDE.md` "zero subscribers" → one production subscriber + fixed the false "exceptions follow the run's failure path" claim (fireHooks catches); `RULES_AND_INSTRUCTIONS.md` gained an honest "written but never read into prompts" row; `permissions-and-approvals.md` gained evaluation-order step 4 + a zone subsection; index rows in `docs/README.md` Guides table and `llms.txt`.
-  - **`llms-full.txt` regenerated: 43 docs / 14,896 lines** (wiki.md auto-included); link check **43 sources / 0 broken** (fixed two wrong `../` depths for root-level guides and reworded two example links that sat inside a code fence — the checker scans fences).
+  - **`llms-full.txt` regenerated: 43 docs / 14,909 lines** (wiki.md auto-included; `--check` drift gate green); link check **43 sources / 0 broken** (fixed two wrong `../` depths for root-level guides and reworded two example links that sat inside a code fence — the checker scans fences).
   - **Disk episode recurred and was cleared**: pre-test free space hit **0.12 GB** (the known <0.5 GB flake zone) → first `npm test` failed 6 integration/load/docker files; cleaned npm cache + stale `%TEMP%` + `Temp\aiharness-sandbox` (1.88 GB of test debris) → **2.65 GB free** → rerun green. Standing watch unchanged: the foreign `secure-openclaw-gateway` container remains a Docker-vhdx drain (flagged, untouched).
   - Gates: `typecheck` 0 - `lint` 0 - **full `npm test` 64 files (63 passed, 1 skipped) EXIT 0** - link check 43 sources / 0 broken - `docs:llms-full` 43 docs / 0 drift - `npm audit --omit=dev --audit-level=high` exit 0.
 
@@ -14193,7 +14193,7 @@ Verification commands run with no network inside the container: seed the
 project with an offline 
 pm test (see scripts/e2e-agent-run.ts).
 
-<!-- ===== docs/guides/wiki.md (261 lines) ===== -->
+<!-- ===== docs/guides/wiki.md (264 lines) ===== -->
 # Repo Wiki Guide
 
 `.aiharness/wiki/` — living documentation that lives **in your repository** and
@@ -14307,6 +14307,9 @@ Details worth knowing:
 - **Hook errors never fail runs.** `maintainFromHook` swallows its own errors
   (logging a warning), and `fireHooks` has a second guard
   (`orchestrator.ts:106-111`) — wiki maintenance is best-effort by design.
+  Each maintenance write is attempted twice (one automatic retry after 1.5s),
+  because a sandbox or bridge tool call can exceed its 30s timeout on a loaded
+  machine while the executor is still spinning up.
 - **Both execution environments are supported.** Cloud projects are written
   through the Docker sandbox; local-bridge projects through the bridge on the
   user's machine — the same `filesystem.list/read/write` tools the agent uses,

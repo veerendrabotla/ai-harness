@@ -111,6 +111,9 @@ Details worth knowing:
 - **Hook errors never fail runs.** `maintainFromHook` swallows its own errors
   (logging a warning), and `fireHooks` has a second guard
   (`orchestrator.ts:106-111`) — wiki maintenance is best-effort by design.
+  Each maintenance write is attempted twice (one automatic retry after 1.5s),
+  because a sandbox or bridge tool call can exceed its 30s timeout on a loaded
+  machine while the executor is still spinning up.
 - **Both execution environments are supported.** Cloud projects are written
   through the Docker sandbox; local-bridge projects through the bridge on the
   user's machine — the same `filesystem.list/read/write` tools the agent uses,

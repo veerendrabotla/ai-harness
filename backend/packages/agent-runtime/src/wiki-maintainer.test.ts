@@ -247,6 +247,45 @@ describe("WikiMaintainer.maintain", () => {
     ).resolves.toBeUndefined();
     expect(logger.warn).toHaveBeenCalled();
   });
+
+  it("retries a timed-out maintenance write once before giving up", async () => {
+    const { deps, files } = fakeDeps();
+    files.set(".aiharness/wiki/pages/.keep", "x");
+    let calls = 0;
+    const inner = deps.writeWiki;
+    deps.writeWiki = async (w, path, content) => {
+      calls++;
+      if (calls === 1) throw new Error("Tool exceeded timeout of 30000ms");
+      return inner(w, path, content);
+    };
+    const m = new WikiMaintainer(deps, logger as never);
+    const written = await m.maintain(input);
+    expect(written).toEqual([WIKI_CHANGELOG_PATH, WIKI_INDEX_PATH]);
+    expect(calls).toBe(3); // changelog failed once, retried OK, then index
+    expect(files.get(WIKI_INDEX_PATH)).toContain("# Demo wiki");
+    expect(logger.warn).toHaveBeenCalledWith(expect.anything(), "wiki write failed; retrying once");
+  });
+
+  it("still refreshes the index when the recent-runs query fails", async () => {
+    const { deps, files } = fakeDeps({
+      async getRecentRuns() { throw new Error("Can't reach database server"); },
+    });
+    files.set(".aiharness/wiki/pages/.keep", "x");
+    const m = new WikiMaintainer(deps, logger as never);
+    const written = await m.maintain(input);
+    expect(written).toEqual([WIKI_CHANGELOG_PATH, WIKI_INDEX_PATH]);
+    expect(files.get(WIKI_INDEX_PATH)).toContain("No completed runs yet");
+    expect(logger.warn).toHaveBeenCalledWith(expect.anything(), "wiki recent-runs query failed");
+  });
+
+  it("does not read a first-run changelog the presence listing lacks", async () => {
+    const { deps, files } = fakeDeps();
+    files.set(".aiharness/wiki/pages/.keep", "x"); // presence, but no changelog.md yet
+    const readWiki = vi.spyOn(deps, "readWiki");
+    const m = new WikiMaintainer(deps, logger as never);
+    expect(await m.maintain(input)).toEqual([WIKI_CHANGELOG_PATH, WIKI_INDEX_PATH]);
+    expect(readWiki).not.toHaveBeenCalled();
+  });
 });
 
 describe("executor output normalization", () => {
