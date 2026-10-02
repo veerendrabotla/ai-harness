@@ -38,6 +38,23 @@ function isSensitiveEnvPath(resourcePath: string | undefined): boolean {
   return base === ".env" || base.startsWith(".env.");
 }
 
+/**
+ * Repo-wiki zone: `.aiharness/wiki/` holds auto-maintained living docs, so
+ * writes there are pre-approved (runs keep docs fresh without parking for
+ * approval). Constraints that keep this safe:
+ *  - explicit policy rules above (DENY / ASK) still win;
+ *  - the `.env` escalation still wins (no `.env` sneaks in via the wiki dir);
+ *  - executors hard-confine these paths to the project root
+ *    (bridge `confinePath`, sandbox `sanitizeRel`), and nothing reads the wiki
+ *    back into context (see docs/guides/wiki.md).
+ */
+function isWikiZonePath(resourcePath: string | undefined): boolean {
+  if (!resourcePath) return false;
+  const norm = resourcePath.replace(/\\/g, "/");
+  if (norm.split("/").includes("..")) return false;
+  return norm === ".aiharness/wiki" || norm.startsWith(".aiharness/wiki/");
+}
+
 function getRequestPath(request: PermissionRequest): string | undefined {
   return request.resourcePath ?? request.path;
 }
@@ -120,6 +137,20 @@ export function evaluatePermission(
       outcome: wildcard.decision,
       reason: `Matched pattern ${wildcard.actionPattern}`,
       matchedRuleId: wildcard.id,
+    };
+  }
+
+  // Repo-wiki pre-approval (after explicit rules so policy can still constrain,
+  // before risk defaults so wiki writes do not park runs for approval).
+  if (
+    (request.toolName === "filesystem.write" || request.toolName === "filesystem.create") &&
+    !isEnvWrite &&
+    isWikiZonePath(getRequestPath(request))
+  ) {
+    return {
+      outcome: "ALLOW",
+      reason: "Pre-approved repo-wiki zone (.aiharness/wiki/)",
+      matchedRuleId: null,
     };
   }
 

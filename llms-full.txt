@@ -1609,7 +1609,7 @@ Documented resolutions for spec conflicts and implementation choices made during
 ## D18 � Rate limits are env-overridable
 - Spec values remain defaults (signup 5/h, login 10/15m, reset 5/h). Local dev/E2E override via RATE_LIMIT_* env vars; production keeps spec numbers.
 
-<!-- ===== EXTENSION_GUIDE.md (470 lines) ===== -->
+<!-- ===== EXTENSION_GUIDE.md (472 lines) ===== -->
 # Extension Guide
 
 "Extensions" in AI Harness sit at three different altitudes, and the
@@ -1915,9 +1915,11 @@ orchestrator.onHook("afterToolCall", async (ctx: HookContext, payload) => {
 ```
 
 Caveats: the bus is **process-local**, has **no HTTP/socket exposure**, and
-currently ships with **zero subscribers** — it is for code you maintain
-inside the worker, not for external plugins. (Docs elsewhere still claim
-some of these never fire; they do — call sites exist for all eleven.)
+ships with **one production subscriber** — the repo-wiki maintainer
+(`afterComplete`, registered in `runtime.ts`; see `docs/guides/wiki.md`) — so
+it is for code you maintain inside the worker, not for external plugins.
+All eleven hooks have real call sites. Subscriber exceptions are caught and
+logged (`lifecycle hook failed`) — they never fail the run.
 
 ### Hook catalog
 
@@ -1933,8 +1935,8 @@ Every hook receives `HookContext { taskId, runId, projectId, workspaceId, event,
 | `onReplan` | a replan was requested | budget watchdogs |
 | `onError` | run-level failure | last-resort telemetry |
 
-Exceptions thrown by a subscriber follow the run's failure path — keep
-hooks fast and defensive.
+Exceptions thrown by a subscriber are caught and logged by `fireHooks` —
+they never fail the run — but keep hooks fast and defensive anyway.
 
 ## Recipe D — outbound webhook
 
@@ -3636,7 +3638,7 @@ Report security vulnerabilities to: security@aiharness.dev
 - Sandbox escape
 - Secret exposure
 
-<!-- ===== TODO_NEXT_PHASE.md (493 lines) ===== -->
+<!-- ===== TODO_NEXT_PHASE.md (518 lines) ===== -->
 # AI Harness — Phased Roadmap & Execution Log
 
 > **Process rule:** this file is APPEND-ONLY and ITERATIVE. Completed phases are never deleted — they stay documented below as the execution record. New work is always appended as the next phase section with status `PLANNED → IN PROGRESS → DONE` plus verification evidence.
@@ -4130,6 +4132,31 @@ Prioritized from a full Qoder feature comparison; we remain ahead on the 16-stat
   - **Supporting fixes**: acceptance test gained the skip guard; engine test picks `type`/`cat` per platform; CI `Boot stack` step now prints `docker compose ps -a` + 200-line service logs on failure instead of failing silently; stale local images rebuilt (fresh `.env` via `setup-env --force`, backup removed).
   - Gates: `typecheck` 0 - `lint` 0 - **full `npm test` 63 files exit 0** (acceptance ran live against the rebuilt stack) - **CI run `36854455231`: ALL 7 jobs green (Lint, Terraform, Typecheck, Security, Build, Test 3m15s, Docker compose boot health 6m21s) - the first fully-green CI run in the repo's history** - deploy run `36854455221` success. Commits: `1bcc8e0` (baseline squash), `524824a` (three CI failures).
   - Known flake: one early local `npm test` exited 1 with fully-filtered (unrecoverable) output; two subsequent full runs green - watch if it recurs.
+
+### Release cut: benchmark rows 10+12 closed, production audit gate - DONE
+
+- [x] 21 - the "all ready" workstream: close the two remaining 🟡 rows of the benchmark tracker, make the npm audit gate real, then cut `v0.1.0` on the green commit.
+  - **`docs/API.md` 351 -> 465 lines**: added `## Provider Matrix` (6 adapter types straight from `model-adapters/src/registry.ts`: credential/base-URL requirements per type - Ollama and OpenAI-compatible REQUIRE `metadata.baseUrl`, credentials AES-256-GCM and decrypted only at execution; streaming native on all 5 real adapters; tool proposals only wired on Anthropic/OpenAI; `AdapterError { code, retryable }` normalization; health-probe note), `## Usage & Cost Analytics` (all 11 real `/v1/usage/*` routes + vocabulary: provider-reported tokens vs `estimatedCost`-is-estimate-not-invoice, quota, cost alerts, anomalies), `## Billing & Subscriptions` (8 Stripe routes, env-gated, signature-verified webhook as the only public one), `## Recipes - curl, CLI, SDK` (login envelope with `.data.accessToken`, bearer call; `aiharness health/plan/events` env-only config; `AiHarnessClient` quickstart; links into CLI_GUIDE/SDK_GUIDE). Recipes are plain-markdown per-tool sections - this site has no tab widget, so the "per-tool tabs" ask is delivered as subsections.
+  - **`SECURITY.md` 247 -> 332 lines**: `## Threat Model` (assets, actors incl. "model output is untrusted input", 5 trust boundaries, explicit non-goals), `## Agent Sandbox Isolation` (every claim mapped to the 22-test `docker-isolation.test.ts` suite: capabilities dropped + read-only rootfs, PID/mount namespace isolation, env hygiene, process/idle/lifetime limits, disk quota, path traversal, zombie/cleanup; `SANDBOX_MODE` docker default), `## Supply Chain & Build Integrity` (blocking CI audit, `npm ci` from lockfile + postcss override, in-image bundles, version-pinned bases, zero build-time secrets), `## Governance & Enterprise Controls` (cross-ref to `docs/ENTERPRISE_SETUP.md`, no-certification disclaimer).
+  - **Tracker rows 10 + 12 flipped 🟡 -> ✅** in `docs/DOCUMENTATION_BENCHMARK.md` §7 with real line counts; §7 now reads 16 shipped / 0 partial / 1 deliberately-not-built.
+  - **`npm audit` remediation -> HIGH=0**: targeted `npm update` cleared brace-expansion, dompurify, engine.io, fast-uri, fastify (incl. a HIGH), ip-address. postcss HIGH needed a root `overrides.postcss=8.5.28` **plus** a surgical lockfile fix for `next@15.5.26`'s exact-pinned nested copy - npm honors a pre-existing lockfile over new overrides (`--package-lock-only` won't rewrite it either), so the nested `node_modules/next/node_modules/postcss` lock entry was replaced with the root 8.5.28 entry, `npm install` synced the physical tree, `npm ci --dry-run` exit 0 proves the CI path accepts it. Remaining: 2 moderates (gaxios/uuid - google-auth-library major-chain, not fixable in-range, documented in SECURITY.md). Local frontend production build ran green against the override (Serwist `sw.js` regenerated - included).
+  - **CI Security job hardened**: `npm audit --omit=dev || true` (informational) -> blocking `npm audit --omit=dev --audit-level=high`.
+  - **Disk crisis + flake chain**: local disk collapsed to **0.11 GB** mid-gate-run (Docker vhdx growth from image rebuilds + the frontend build + npm cache), and the parallel test suite started failing on `Hook timed out in 15000ms` (4-5 integration files) and slow Docker operations (docker-isolation 3 tests). Diagnosed as I/O starvation, not code: recovered to 1.14 GB (npm cache 0.7 + frontend/.next 0.4 + npm logs + recycle bin), then every failing file passed solo - sso 11/11, docker-isolation 22/22, acceptance 4/4 - and the **final full `npm test` is green: 63 files, 62 passed, 1 skipped, EXIT 0**. Machine note (flagged, untouched): `secure-openclaw-gateway` - a container outside this stack - is crash-looping at 1,587 restarts and writes logs into Docker's vhdx; it is a standing disk drain. Watch: npm cache and vhdx re-fill over time - the same failure will recur if free space falls under ~0.5 GB.
+  - `llms-full.txt` regenerated (42 docs / 14,601 lines); link check 43 sources / 0 broken.
+  - Gates: `typecheck` 0 - `lint` 0 - **full `npm test` 63 files (62 passed, 1 skipped) EXIT 0** - link check 0 broken - `npm audit --omit=dev --audit-level=high` exit 0 - frontend production build success.
+
+### PHASE 14 execution log (task 22) - repo wiki: auto-maintained `.aiharness/wiki/` living docs - DONE
+
+- [x] 22 wiki - PHASE 14 backlog #1 (adoption gap: Qoder-parity Repo Wiki): a repo-local `.aiharness/wiki/` directory whose generated pages are refreshed after every completed run and whose topic pages are agent-authored, wired through the platform's first production lifecycle-hook subscriber and a narrowly pre-approved write zone.
+  - **New `backend/packages/agent-runtime/src/wiki-maintainer.ts`**: `WikiMaintainer` with `maintain()` (presence check → run facts → changelog merge → index rebuild) and `maintainFromHook()` (error-swallowing, logs `wiki maintenance failed` at warn); `createPrismaWikiDeps(prisma, harness)` queries `Task`/`TaskPlan` for goal, steps, `affectedFiles` (≤5 shown), verification counts, last-5 completed tasks; `buildRunEntry` emits an `<!-- run:id -->` idempotency marker + single-line 120-char truncated goal (hostile multi-line goals cannot inject headings); `mergeChangelog` newest-first, marker-deduped, capped at 50 entries; `buildIndex` = generated header + pages TOC (from `pages/*.md` only) + recent-runs table + generated footer. Ownership rule: `index.md`/`changelog.md` generated, `pages/*.md` authored — maintainer never rewrites topic pages.
+  - **Wiring**: `runtime.ts` registers `wikiMaintainer` and `orchestrator.onHook("afterComplete", ...)` after orchestrator creation — the first production subscriber on the hook bus (payload `{planId, stepCount, verificationPassed}` from `orchestrator.ts:930`). Opt-in = directory presence (no schema change; `fireHooks` + the maintainer both guard errors, so maintenance can never fail a run). Environment mirrors the orchestrator: `CLOUD_SANDBOX` via Docker, `LOCAL_BRIDGE` via bridge — both through the existing `filesystem.list/read/write` tools with executor path confinement.
+  - **Pre-approved wiki zone** (`permission-engine/src/evaluate.ts`): `filesystem.write`/`filesystem.create` under `.aiharness/wiki/` return `ALLOW` without a rule, checked AFTER deny/env-guard/task-approval/exact/wildcard rules and BEFORE the risk defaults — workspace policy still wins, `.env` inside the zone still escalates to `ASK`, `..` traversal and `.aiharness/wikifoo/` prefix fall through to `ASK`. Tool count stays 24 (no new tool).
+  - **Sandbox write fix** (`backend/apps/worker/src/sandbox.ts`): write case now `mkdir -p "$(dirname ...)"` before `cp` — nested first-writes on CLOUD_SANDBOX previously failed on fresh directories.
+  - **Tests**: new `wiki-maintainer.test.ts` **23/23** (hostile-goal flattening, marker idempotency, 50-entry cap, index ownership/TOC/recent-runs, presence-gated skip, write-failure logging, extract helpers) + `permission-engine/src/evaluate.test.ts` **+7 zone tests** (zone allow, rule precedence, env escalation, traversal, prefix, non-write tools) — all green. Three test-side bugs found and fixed during bring-up: the fake `listWiki` now mirrors `ls` semantics (immediate children incl. directory names — the old filter dropped directories so presence detection never fired), the cap-test loop bound (`MAX+15` so `run-65` actually exists), and the hostile-goal assertion checks line-starts rather than substrings.
+  - **Docs**: new **`docs/guides/wiki.md`** (layout/ownership, maintenance flow diagram, zone guardrails table, seeding recipes A/B, changelog/index examples, troubleshooting, 6-item FAQ); stale-claim corrections — `hooks-and-events.md` "no production handlers" → wiki subscriber + table extended to **all 11 hooks firing** with payloads/line refs (`beforeComplete` :915, `afterComplete` :930, `onReplan` :1521, `onError` :1635) and the "Declared but never fired" section removed; `EXTENSION_GUIDE.md` "zero subscribers" → one production subscriber + fixed the false "exceptions follow the run's failure path" claim (fireHooks catches); `RULES_AND_INSTRUCTIONS.md` gained an honest "written but never read into prompts" row; `permissions-and-approvals.md` gained evaluation-order step 4 + a zone subsection; index rows in `docs/README.md` Guides table and `llms.txt`.
+  - **`llms-full.txt` regenerated: 43 docs / 14,896 lines** (wiki.md auto-included); link check **43 sources / 0 broken** (fixed two wrong `../` depths for root-level guides and reworded two example links that sat inside a code fence — the checker scans fences).
+  - **Disk episode recurred and was cleared**: pre-test free space hit **0.12 GB** (the known <0.5 GB flake zone) → first `npm test` failed 6 integration/load/docker files; cleaned npm cache + stale `%TEMP%` + `Temp\aiharness-sandbox` (1.88 GB of test debris) → **2.65 GB free** → rerun green. Standing watch unchanged: the foreign `secure-openclaw-gateway` container remains a Docker-vhdx drain (flagged, untouched).
+  - Gates: `typecheck` 0 - `lint` 0 - **full `npm test` 64 files (63 passed, 1 skipped) EXIT 0** - link check 43 sources / 0 broken - `docs:llms-full` 43 docs / 0 drift - `npm audit --omit=dev --audit-level=high` exit 0.
 
 <!-- ===== TOOL_GUIDE.md (195 lines) ===== -->
 # AI Harness — Tool Guide
@@ -9350,7 +9377,7 @@ kill ambiguity · state format/style · keep history (revise & resume, don't res
 - [examples/README.md](examples/README.md) — eight runnable recipes with sample prompts
 - [APP_FLOW.md](APP_FLOW.md) — task lifecycle state machine
 
-<!-- ===== docs/README.md (111 lines) ===== -->
+<!-- ===== docs/README.md (112 lines) ===== -->
 # AI Harness Documentation
 
 AI Harness is a model-independent agentic development environment: a control plane where AI coding agents understand projects, assemble bounded context, draft structured plans, request human approval, execute policy-controlled tools, verify their work, and leave a complete auditable trail.
@@ -9403,6 +9430,7 @@ This documentation hub links every guide, reference, and deep-dive document in t
 | [Context & Memory](guides/context-and-memory.md) | Budgeted context assembly, repo map, compaction, project memory |
 | [Models & Providers](guides/models-and-providers.md) | Provider credentials, model routing, fallbacks, cost tracking |
 | [Hooks & Events](guides/hooks-and-events.md) | Realtime events, replay, lifecycle hooks, metrics |
+| [Repo Wiki](guides/wiki.md) | `.aiharness/wiki/` living docs, auto-maintenance, pre-approved write zone |
 | [MCP](guides/mcp.md) | Connect HTTP/SSE/STDIO Model Context Protocol servers |
 | [Self-Hosting](guides/self-hosting.md) | Single-node, production containers, GCP/Terraform, scaling |
 | [Enterprise Setup](ENTERPRISE_SETUP.md) | SSO/SCIM, roles, audit, secrets, IP allowlist, backups, rollout playbook |
@@ -9463,7 +9491,7 @@ This documentation hub links every guide, reference, and deep-dive document in t
 
 A machine-readable index of every document is available at [`/llms.txt`](../llms.txt) in the repository root. Fetch individual markdown files directly — all documentation is plain GitHub-flavored markdown with no gated content.
 
-<!-- ===== docs/RULES_AND_INSTRUCTIONS.md (452 lines) ===== -->
+<!-- ===== docs/RULES_AND_INSTRUCTIONS.md (453 lines) ===== -->
 # Rules and Instructions
 
 Everything that steers an agent **before** it acts, and everything that
@@ -9698,6 +9726,7 @@ Stated plainly, because docs from other tools assume these exist:
 |---|---|---|
 | `AGENTS.md` / `CLAUDE.md` auto-read | ❌ Not read; zero code references; none in this repo | Workspace instructions (tier 2) |
 | Repo/project-scoped rule files | ❌ No project instructions field at all | Workspace instructions + per-task constraints |
+| Living docs auto-maintained in-repo (Qoder Repo Wiki) | ✅ `.aiharness/wiki/` is **written** by runs (generated index/changelog + agent topic pages) but **never read** into prompts — output, not steering | Topic pages for humans; workspace instructions for steering |
 | Per-file glob rules | ❌ No file-path rule matching | Constraints ("only touch X/**"); `.env` writes escalate automatically |
 | Knowledge base auto-injected into prompts | ❌ Knowledge is search-only (UI/API) | Paste the snippet into constraints or instructions |
 | Frontmatter in rules files | ❌ No frontmatter parser anywhere | n/a — see matrix below |
@@ -12286,7 +12315,7 @@ How users actually steer what ends up in the prompt:
 7. **Disable memory per workspace** with the `memory_enabled` feature flag if you want
    runs to be stateless; there is no per-task switch.
 
-<!-- ===== docs/guides/hooks-and-events.md (302 lines) ===== -->
+<!-- ===== docs/guides/hooks-and-events.md (306 lines) ===== -->
 # Hooks and Events
 
 The observability and automation surface: ordered runtime events over WebSocket, REST polling for recovery, in-process lifecycle hooks, and Prometheus metrics.
@@ -12429,7 +12458,7 @@ orchestrator.offHook("beforeToolCall", handler);
 - Handlers may be sync or async and are awaited sequentially in registration order (`orchestrator.ts:102-112`).
 - A throwing handler is caught and logged as `lifecycle hook failed` at warn level — hook failures never fail the run (`orchestrator.ts:106-111`).
 
-These hooks are process-local: they are not exposed over HTTP or WebSocket, and no `onHook()` registration exists elsewhere in the repository — the bus currently has no production handlers.
+These hooks are process-local: they are not exposed over HTTP or WebSocket. One production subscriber ships with the platform — the repo-wiki maintainer registers `afterComplete` at runtime startup (`runtime.ts`) to refresh `.aiharness/wiki/` after each completed run (see the [Wiki Guide](wiki.md)).
 
 ### Hooks that fire, with payloads
 
@@ -12442,10 +12471,14 @@ These hooks are process-local: they are not exposed over HTTP or WebSocket, and 
 | `onToolError` | After the tool returns with any status other than `SUCCEEDED` — same payload as `afterToolCall` (main step path only) | `{ toolName, toolCallId, status, failureCode }` (`orchestrator.ts:717`) |
 | `beforeVerification` | After verification commands are resolved (plan's `verificationPlan` or auto-inferred), before execution | `{ commandCount }` (`orchestrator.ts:818`) |
 | `afterVerification` | After `VerificationEngine.verify()` returns, before failure-driven replanning | `{ results }` — the verification result array, each entry exposing at least `command`, `status`, `output` (`orchestrator.ts:822`, used at `orchestrator.ts:824-829`) |
+| `beforeComplete` | After the security scan, immediately before the transition to `COMPLETED` | `{ planId, stepCount, securityFindings }` (`orchestrator.ts:915`) |
+| `afterComplete` | After the task state is `COMPLETED` and `RUN_COMPLETED` is published — the repo-wiki maintainer subscribes here | `{ planId, stepCount, verificationPassed }` (`orchestrator.ts:930`) |
+| `onReplan` | When a failure triggers a replan attempt | `{ attempt, failureSummary }` (`orchestrator.ts:1521`) |
+| `onError` | When the run fails (`handleStageFailure`) — logged with `.catch()` as extra insurance | `{ failureCode, message }` (`orchestrator.ts:1635`) |
 
-### Declared but never fired
-
-`beforeComplete`, `afterComplete`, `onReplan`, and `onError` are members of the `HookEvent` union (`orchestrator.ts:46-49`) but no `fireHooks()` call exists for them anywhere in the repository — `fireHooks` appears only at `orchestrator.ts:412, 502, 715, 717, 818, 822`. Do not design around them yet.
+All eleven members of `HookEvent` have a `fireHooks()` call site; there is no
+"declared but never fired" subset. Handler exceptions are caught and logged
+(`lifecycle hook failed`) — they never fail the run.
 
 ### Example
 
@@ -13442,7 +13475,7 @@ Not documented here because it could not be verified in source: OAuth sign-in ti
 values (GitHub/Google OAuth routes define no explicit timeout constant), and any
 per-provider quota or `Retry-After` honored from upstream provider responses.
 
-<!-- ===== docs/guides/permissions-and-approvals.md (349 lines) ===== -->
+<!-- ===== docs/guides/permissions-and-approvals.md (361 lines) ===== -->
 # Permissions and Approvals
 
 How AI Harness decides whether a model-proposed action runs, pauses for a human, or is refused — for the operator watching a run and for the integrator wiring the control surface.
@@ -13462,7 +13495,8 @@ Documented in the header comment of `evaluate.ts:3-14` and implemented at `evalu
 1. **Explicit DENY wins.** Any rule whose `decision === "DENY"` and whose `toolName` matches (exact or wildcard) short-circuits to DENY — checked before everything else, including before an active TASK-scope approval (`evaluate.ts:51-60` vs. `evaluate.ts:67`).
 2. **An active TASK-scope approval for the same tool grants ALLOW** (`evaluate.ts:67-76`). ONCE-scope approvals are consumed by the caller before invocation and are not modeled inside the engine (`evaluate.ts:8-9`).
 3. **Most-specific non-DENY rule wins**: exact `toolName` match first (`evaluate.ts:78-106`), then `actionPattern` wildcard (`evaluate.ts:108-124`).
-4. **Risk-based defaults when nothing matches** (`evaluate.ts:16-27`):
+4. **Pre-approved repo-wiki zone**: if no rule matched and the request is `filesystem.write` / `filesystem.create` with a target inside `.aiharness/wiki/`, the verdict is `ALLOW` (see below).
+5. **Risk-based defaults when nothing matches** (`evaluate.ts:16-27`):
 
 | Risk level | Default | Reason string |
 |---|---|---|
@@ -13491,6 +13525,17 @@ Two escalations force ASK even when policy says ALLOW:
 - The DENY rule is evaluated first, so no approval, TASK-scope grant, or ALLOW rule can override it inside the same snapshot.
 - The runtime never creates an approval request on DENY — there is no "approve anyway" path. `orchestrator.ts:667-683` marks the tool call `DENIED`, publishes `TOOL_DENIED` with `decision.reason`, then either replans (`replanAfterFailure`) or fails the run.
 - The only remedy is changing the workspace policy rule, so the next evaluation sees different rules.
+
+### Pre-approved repo-wiki zone
+
+`filesystem.write` and `filesystem.create` targeting a path inside `.aiharness/wiki/` return `ALLOW` without needing a rule (`evaluate.ts`, checked after explicit rules and before the risk defaults). This is what lets run maintenance and agent-authored topic pages proceed unattended — see the [Wiki Guide](wiki.md). Guardrails:
+
+- Explicit `DENY`/`ASK` **rules still win** — the zone only applies when nothing matched.
+- `.env` / `.env.*` writes inside the zone still escalate to `ASK`.
+- `..` traversal, the `.aiharness/wiki` prefix without a separator (`.aiharness/wikifoo/...`), and every tool other than `filesystem.write` / `filesystem.create` fall through to the normal defaults.
+- The executors additionally confine all paths to the project root — the zone is a convenience layer, not the boundary.
+
+To gate wiki writes after all, add an explicit `ASK` or `DENY` rule for `filesystem.write` in workspace policy.
 
 ### Companion resource engine
 
@@ -14147,6 +14192,269 @@ ode:22
 Verification commands run with no network inside the container: seed the
 project with an offline 
 pm test (see scripts/e2e-agent-run.ts).
+
+<!-- ===== docs/guides/wiki.md (261 lines) ===== -->
+# Repo Wiki Guide
+
+`.aiharness/wiki/` — living documentation that lives **in your repository** and
+is **auto-maintained by AI Harness runs**. After every completed run the
+platform refreshes the generated pages; the agent authors topic pages on
+request. This guide is the full reference: layout, ownership, the
+pre-approved write zone, seeding, and troubleshooting.
+
+> Related: [Hooks & Events](hooks-and-events.md) (the `afterComplete` hook that
+> drives maintenance), [Permissions & Approvals](permissions-and-approvals.md)
+> (the pre-approved zone), [Context & Memory](context-and-memory.md) (what
+> reaches the model — the wiki is *not* injected).
+
+---
+
+## 1. What it is
+
+| Property | Value |
+|---|---|
+| Location | `.aiharness/wiki/` inside the project root (repo-local) |
+| Opt-in | The directory must exist — nothing is created until you seed it |
+| Trigger | Every run that reaches `COMPLETED` fires the `afterComplete` lifecycle hook |
+| Maintainer | `WikiMaintainer` (`backend/packages/agent-runtime/src/wiki-maintainer.ts`) — the hook bus's first production subscriber |
+| Surfaces | Files only (no API/CLI/UI surface in v0.1 — read them in your editor, host them, commit them) |
+| Context injection | **None.** The wiki is output for humans; steering still comes from workspace instructions and constraints |
+
+Why a repo-local directory: unlike the knowledge base or project memory, the
+wiki travels with the code — it reviews in PRs, versions in git, and renders on
+any git host.
+
+---
+
+## 2. Layout and file ownership
+
+```text
+.aiharness/wiki/
+├── index.md        # GENERATED — home page: topic-page TOC + recent runs
+├── changelog.md    # GENERATED — one entry per completed run (newest first)
+└── pages/          # AUTHORED — one markdown file per topic, by the agent
+    ├── architecture.md
+    ├── data-model.md
+    └── ...
+```
+
+**Ownership is strict — this is what prevents merge chaos:**
+
+| File | Owner | Rule |
+|---|---|---|
+| `index.md` | Platform | Regenerated after each maintained run. Do not hand-edit; prose goes in `pages/`. |
+| `changelog.md` | Platform | Merged automatically (newest-first, idempotent per run, capped at 50 entries). |
+| `pages/*.md` | Agent (and humans) | Free-form markdown. The maintainer never rewrites these — it only links them from the index. |
+
+The generated `index.md` states this rule in its own header, so anyone opening
+the file learns where to put content.
+
+### What a generated changelog entry looks like
+
+```markdown
+<!-- run:4f9c2a10-8f3e-4b7a-9d21-1c6e2b9a77de -->
+## 2026-10-02 — Add retry logic to the provider router
+
+- Run `4f9c2a10` · 4 step(s) · verification 3/3 passed
+- Touched: `backend/packages/model-adapters/src/router.ts`, `src/retry.ts`
+```
+
+The HTML comment is the idempotency marker — a replayed or retried run never
+duplicates its entry. Goals are flattened to a single line and truncated at
+120 characters before rendering, so a hostile or multi-line goal cannot inject
+extra headings.
+
+### What the generated index looks like
+
+```markdown
+# My project wiki
+
+Living documentation for this repository, generated and refreshed automatically by AI Harness runs.
+Topic pages are authored by the agent under `.aiharness/wiki/pages/`; ...
+
+## Topic pages
+- architecture — .aiharness/wiki/pages/architecture.md
+- data model — .aiharness/wiki/pages/data-model.md
+
+## Recent runs
+| Date | Goal |
+| --- | --- |
+| 2026-10-02 | Add retry logic to the provider router |
+
+---
+_Generated by AI Harness · last maintained 2026-10-02T14:03:11.000Z (run `4f9c2a10`)_
+```
+
+---
+
+## 3. How auto-maintenance works
+
+```text
+run reaches COMPLETED
+  └─ orchestrator.fireHooks("afterComplete", ctx)        orchestrator.ts:930
+       └─ WikiMaintainer.maintainFromHook(ctx)           runtime.ts (registered at startup)
+            ├─ getProject → root + environment (LOCAL_BRIDGE | CLOUD_SANDBOX)
+            ├─ list .aiharness/wiki/          → empty/absent ⇒ STOP (opt-in)
+            ├─ gather run facts (goal, steps, verification, affected files)
+            ├─ read changelog.md → merge entry (idempotent, capped) → write
+            ├─ list pages/*.md → TOC
+            ├─ query last 5 completed tasks → recent-runs table
+            └─ write index.md
+```
+
+Details worth knowing:
+
+- **Hook errors never fail runs.** `maintainFromHook` swallows its own errors
+  (logging a warning), and `fireHooks` has a second guard
+  (`orchestrator.ts:106-111`) — wiki maintenance is best-effort by design.
+- **Both execution environments are supported.** Cloud projects are written
+  through the Docker sandbox; local-bridge projects through the bridge on the
+  user's machine — the same `filesystem.list/read/write` tools the agent uses,
+  with the same path confinement.
+- **Presence is the switch.** If `.aiharness/wiki/` does not exist, the
+  maintainer does nothing. Deleting the directory disables maintenance; no
+  setting, flag, or migration is involved.
+- **Idempotency.** A run recorded once is never recorded twice (marker match),
+  but `index.md` is always refreshed (the recent-runs table and page TOC can
+  change even when the changelog does not).
+- **Growth is bounded.** The changelog keeps the newest 50 entries; older ones
+  are dropped on merge. Git history is the permanent record.
+
+---
+
+## 4. The pre-approved write zone
+
+By default `filesystem.write` is `WRITE` risk → **ASK** (an approval prompt for
+every write). Wiki maintenance would park every run on its first changelog
+write — so the permission engine grants a narrow pre-approval
+(`backend/packages/permission-engine/src/evaluate.ts`):
+
+> Writes whose target is inside `.aiharness/wiki/` return `ALLOW` without a
+> rule.
+
+Guardrails that keep this safe (all covered by `evaluate.test.ts`):
+
+| Guard | Effect |
+|---|---|
+| Evaluation order | The zone is checked **after** explicit `DENY`/`ASK` policy rules — workspace policy can still deny or gate wiki writes |
+| `.env` escalation | `.aiharness/wiki/.env` (or any `.env*` inside the zone) escalates to `ASK` as everywhere else |
+| Traversal rejection | `.aiharness/wiki/../../secrets.md` is **not** in the zone → falls back to normal `ASK` |
+| Prefix strictness | `.aiharness/wikifoo/x.md` is not in the zone |
+| Executor confinement | Both executors re-confine every path to the project root (`confinePath` on the bridge, `sanitizeRel` in the sandbox) — the permission layer is a convenience, the executor is the boundary |
+| Non-wiki tools unaffected | `filesystem.rename`, `filesystem.delete`, `terminal.run` etc. never get the zone |
+
+One honest caveat: a model could read a secret (reads are `ALLOW` by default
+platform-wide) and write it into a wiki page without an approval gate. The
+exfiltration path still crosses `git.commit` (which **is** `ASK`), and wiki
+content lands in your repo where it reviews like any other change — but if you
+want zero unattended wiki writes, add an explicit `ASK` or `DENY` rule for
+`filesystem.write` in your workspace policy and the zone stops applying.
+
+---
+
+## 5. Seeding a wiki (first run)
+
+Maintenance is opt-in via directory presence, so seed once per repo:
+
+**Option A — ask the agent (either environment):**
+
+```text
+Goal: Initialize the repo wiki at .aiharness/wiki/
+Create .aiharness/wiki/pages/architecture.md documenting this repository's
+major components and how they fit together, based on what you find.
+Keep .aiharness/wiki/index.md minimal — it is regenerated automatically.
+```
+
+The agent's `filesystem.write` into `.aiharness/wiki/` is pre-approved (§4), so
+this runs without approval prompts.
+
+**Option B — by hand:**
+
+```bash
+mkdir -p .aiharness/wiki/pages
+printf '# My project wiki\n\n<!-- seeded -->\n' > .aiharness/wiki/index.md
+git add .aiharness/wiki
+```
+
+From the next `COMPLETED` run onward, `changelog.md` and `index.md` maintain
+themselves.
+
+**Suggested first topic pages:** `architecture.md`, `data-model.md`,
+`conventions.md`, `decisions.md` (ADR-style entries the agent appends to).
+
+---
+
+## 6. What feeds a changelog entry
+
+Each entry is assembled from data the run already produced (no extra model
+calls):
+
+| Field | Source |
+|---|---|
+| Date + goal | `Task.goal`, `Task.completedAt` |
+| Step count | `afterComplete` hook payload (`orchestrator.ts:930`) |
+| Verification passed/total | Hook payload + `VerificationResult` count for the run |
+| Touched files | `TaskPlan.affectedFiles` (up to 5 shown, `+N more`) |
+| Recent-runs table | Last 5 `COMPLETED` tasks for the project |
+
+Failed runs do not fire `afterComplete` and therefore do not appear — the wiki
+records the completed history, while failures live in the task timeline and
+audit log.
+
+---
+
+## 7. Troubleshooting
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Nothing appears after runs | `.aiharness/wiki/` doesn't exist | Seed it (§5) — presence is the opt-in switch |
+| Changelog not updating | Run ended `FAILED`/`CANCELLED` (no `afterComplete`), or a previous entry already holds the run marker | Check the task state; markers are by design |
+| Writes fail on cloud projects | Sandbox image too old for nested `mkdir -p` (fixed in current images) or workspace materialization failed | Rebuild worker images; check worker logs for `wiki maintenance failed` |
+| Writes fail on local-bridge projects | Bridge offline when the run completes | Start the bridge; maintenance simply skips while it's down |
+| `index.md` overwrote my edits | `index.md` is generated | Move prose into `pages/*.md` (§2) |
+| Wiki grows too large | Changelog is capped (50), but `pages/` is yours | Prune pages like any repo file |
+| Want wiki writes gated after all | Add an explicit `ASK`/`DENY` rule for `filesystem.write` | §4 guardrail table |
+
+---
+
+## 8. FAQ
+
+**Does the wiki reach the model's context?**
+No. Nothing reads `.aiharness/wiki/` back into prompts — it is documentation
+output. Steering remains workspace instructions (rank 2), goal, and
+constraints; see [Rules & Instructions](../RULES_AND_INSTRUCTIONS.md).
+
+**Is there a CLI or API for it?**
+Not in v0.1. The CLI is a pure API client with no file access
+([CLI Guide](../../CLI_GUIDE.md)), and the wiki lives in the repo, not the
+database. Read it with your editor or git host.
+
+**Can I move it elsewhere?**
+The paths are constants in `wiki-maintainer.ts` (and mirrored by the
+permission zone). Renaming means changing both — treat
+`.aiharness/wiki/` as the contract for now.
+
+**How do I turn it off?**
+`rm -rf .aiharness/wiki` — absence stops maintenance permanently.
+
+**Does it work with a repo that has no AI Harness project?**
+No — maintenance runs from the worker's `afterComplete` hook, so the repo must
+be connected as an AI Harness project (cloud or local bridge).
+
+**What about commits?**
+The maintainer never commits. Wiki changes land as working-tree edits — commit
+them yourself or let the agent's `git.commit` step include them (that tool is
+`ASK`, not pre-approved).
+
+---
+
+## Related reading
+
+- [Hooks & Events](hooks-and-events.md) — the lifecycle-hook bus and all eleven events
+- [Permissions & Approvals](permissions-and-approvals.md) — verdicts, policies, the zone's evaluation order
+- [Context & Memory](context-and-memory.md) — what actually reaches the model
+- [Rules & Instructions](../RULES_AND_INSTRUCTIONS.md) — the four steering tiers (the wiki is none of them)
+- [EXTENSION_GUIDE](../../EXTENSION_GUIDE.md) — hook catalog for in-worker extensions
 
 <!-- ===== docs/troubleshooting.md (449 lines) ===== -->
 # Troubleshooting

@@ -19,6 +19,7 @@ import { CheckpointManager } from "./checkpoint-manager.js";
 import { VerificationEngine, type BrowserEngineLike } from "./verification-engine.js";
 import { TaskOrchestrator, type RunOutcome } from "./orchestrator.js";
 import { MemoryAwareOrchestrator } from "./memory-aware-orchestrator.js";
+import { WikiMaintainer, createPrismaWikiDeps } from "./wiki-maintainer.js";
 import { MultiAgentOrchestrator } from "./multi-agent-orchestrator.js";
 import { InMemoryAgentCommunication, type AgentCommunicationChannel } from "./agent-communication.js";
 import type { ProjectMemoryEngine } from "@ai-harness/project-memory";
@@ -145,6 +146,13 @@ export function buildAgentRuntime(options: {
     router,
     communication,
   );
+
+  // First production lifecycle-hook subscriber: after each COMPLETED run,
+  // refresh `.aiharness/wiki/` in the project repo (opt-in — skipped when the
+  // wiki directory does not exist). Errors are swallowed by the maintainer and
+  // by fireHooks; they never affect the run.
+  const wikiMaintainer = new WikiMaintainer(createPrismaWikiDeps(prisma, harness), logger);
+  orchestrator.onHook("afterComplete", (ctx) => wikiMaintainer.maintainFromHook(ctx));
 
   return {
     orchestrator,

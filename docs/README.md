@@ -50,6 +50,7 @@ This documentation hub links every guide, reference, and deep-dive document in t
 | [Context & Memory](guides/context-and-memory.md) | Budgeted context assembly, repo map, compaction, project memory |
 | [Models & Providers](guides/models-and-providers.md) | Provider credentials, model routing, fallbacks, cost tracking |
 | [Hooks & Events](guides/hooks-and-events.md) | Realtime events, replay, lifecycle hooks, metrics |
+| [Repo Wiki](guides/wiki.md) | `.aiharness/wiki/` living docs, auto-maintenance, pre-approved write zone |
 | [MCP](guides/mcp.md) | Connect HTTP/SSE/STDIO Model Context Protocol servers |
 | [Self-Hosting](guides/self-hosting.md) | Single-node, production containers, GCP/Terraform, scaling |
 | [Enterprise Setup](ENTERPRISE_SETUP.md) | SSO/SCIM, roles, audit, secrets, IP allowlist, backups, rollout playbook |

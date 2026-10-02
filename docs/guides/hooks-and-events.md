@@ -140,7 +140,7 @@ orchestrator.offHook("beforeToolCall", handler);
 - Handlers may be sync or async and are awaited sequentially in registration order (`orchestrator.ts:102-112`).
 - A throwing handler is caught and logged as `lifecycle hook failed` at warn level — hook failures never fail the run (`orchestrator.ts:106-111`).
 
-These hooks are process-local: they are not exposed over HTTP or WebSocket, and no `onHook()` registration exists elsewhere in the repository — the bus currently has no production handlers.
+These hooks are process-local: they are not exposed over HTTP or WebSocket. One production subscriber ships with the platform — the repo-wiki maintainer registers `afterComplete` at runtime startup (`runtime.ts`) to refresh `.aiharness/wiki/` after each completed run (see the [Wiki Guide](wiki.md)).
 
 ### Hooks that fire, with payloads
 
@@ -153,10 +153,14 @@ These hooks are process-local: they are not exposed over HTTP or WebSocket, and 
 | `onToolError` | After the tool returns with any status other than `SUCCEEDED` — same payload as `afterToolCall` (main step path only) | `{ toolName, toolCallId, status, failureCode }` (`orchestrator.ts:717`) |
 | `beforeVerification` | After verification commands are resolved (plan's `verificationPlan` or auto-inferred), before execution | `{ commandCount }` (`orchestrator.ts:818`) |
 | `afterVerification` | After `VerificationEngine.verify()` returns, before failure-driven replanning | `{ results }` — the verification result array, each entry exposing at least `command`, `status`, `output` (`orchestrator.ts:822`, used at `orchestrator.ts:824-829`) |
+| `beforeComplete` | After the security scan, immediately before the transition to `COMPLETED` | `{ planId, stepCount, securityFindings }` (`orchestrator.ts:915`) |
+| `afterComplete` | After the task state is `COMPLETED` and `RUN_COMPLETED` is published — the repo-wiki maintainer subscribes here | `{ planId, stepCount, verificationPassed }` (`orchestrator.ts:930`) |
+| `onReplan` | When a failure triggers a replan attempt | `{ attempt, failureSummary }` (`orchestrator.ts:1521`) |
+| `onError` | When the run fails (`handleStageFailure`) — logged with `.catch()` as extra insurance | `{ failureCode, message }` (`orchestrator.ts:1635`) |
 
-### Declared but never fired
-
-`beforeComplete`, `afterComplete`, `onReplan`, and `onError` are members of the `HookEvent` union (`orchestrator.ts:46-49`) but no `fireHooks()` call exists for them anywhere in the repository — `fireHooks` appears only at `orchestrator.ts:412, 502, 715, 717, 818, 822`. Do not design around them yet.
+All eleven members of `HookEvent` have a `fireHooks()` call site; there is no
+"declared but never fired" subset. Handler exceptions are caught and logged
+(`lifecycle hook failed`) — they never fail the run.
 
 ### Example
 

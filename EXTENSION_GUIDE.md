@@ -303,9 +303,11 @@ orchestrator.onHook("afterToolCall", async (ctx: HookContext, payload) => {
 ```
 
 Caveats: the bus is **process-local**, has **no HTTP/socket exposure**, and
-currently ships with **zero subscribers** — it is for code you maintain
-inside the worker, not for external plugins. (Docs elsewhere still claim
-some of these never fire; they do — call sites exist for all eleven.)
+ships with **one production subscriber** — the repo-wiki maintainer
+(`afterComplete`, registered in `runtime.ts`; see `docs/guides/wiki.md`) — so
+it is for code you maintain inside the worker, not for external plugins.
+All eleven hooks have real call sites. Subscriber exceptions are caught and
+logged (`lifecycle hook failed`) — they never fail the run.
 
 ### Hook catalog
 
@@ -321,8 +323,8 @@ Every hook receives `HookContext { taskId, runId, projectId, workspaceId, event,
 | `onReplan` | a replan was requested | budget watchdogs |
 | `onError` | run-level failure | last-resort telemetry |
 
-Exceptions thrown by a subscriber follow the run's failure path — keep
-hooks fast and defensive.
+Exceptions thrown by a subscriber are caught and logged by `fireHooks` —
+they never fail the run — but keep hooks fast and defensive anyway.
 
 ## Recipe D — outbound webhook
 

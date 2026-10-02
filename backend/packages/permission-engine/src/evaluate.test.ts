@@ -94,6 +94,79 @@ describe("permission engine", () => {
   });
 });
 
+describe("repo-wiki pre-approved zone", () => {
+  it("allows writes under .aiharness/wiki/ without a rule", () => {
+    const result = evaluatePermission(snapshot(), {
+      toolName: "filesystem.write",
+      riskLevel: "WRITE",
+      resourcePath: ".aiharness/wiki/index.md",
+    });
+    expect(result.outcome).toBe("ALLOW");
+    expect(result.reason).toContain("repo-wiki zone");
+  });
+
+  it("allows filesystem.create into the wiki dir (backslash paths included)", () => {
+    const result = evaluatePermission(snapshot(), {
+      toolName: "filesystem.create",
+      riskLevel: "WRITE",
+      resourcePath: ".aiharness\\wiki\\pages\\architecture.md",
+    });
+    expect(result.outcome).toBe("ALLOW");
+  });
+
+  it("still asks for writes outside the wiki zone", () => {
+    const result = evaluatePermission(snapshot(), {
+      toolName: "filesystem.write",
+      riskLevel: "WRITE",
+      resourcePath: "src/app.ts",
+    });
+    expect(result.outcome).toBe("ASK");
+  });
+
+  it("rejects traversal sneaking out of the wiki zone", () => {
+    const result = evaluatePermission(snapshot(), {
+      toolName: "filesystem.write",
+      riskLevel: "WRITE",
+      resourcePath: ".aiharness/wiki/../../secrets.md",
+    });
+    expect(result.outcome).toBe("ASK");
+  });
+
+  it("rejects sibling dirs that merely share the prefix", () => {
+    const result = evaluatePermission(snapshot(), {
+      toolName: "filesystem.write",
+      riskLevel: "WRITE",
+      resourcePath: ".aiharness/wikifoo/x.md",
+    });
+    expect(result.outcome).toBe("ASK");
+  });
+
+  it("escalates wiki .env writes to ASK", () => {
+    const result = evaluatePermission(snapshot(), {
+      toolName: "filesystem.write",
+      riskLevel: "WRITE",
+      resourcePath: ".aiharness/wiki/.env",
+    });
+    expect(result.outcome).toBe("ASK");
+  });
+
+  it("explicit policy rules still win over the wiki zone", () => {
+    const ask = snapshot({
+      rules: [{ id: "ask-wiki", toolName: "filesystem.write", actionPattern: null, riskLevel: "WRITE", decision: "ASK" }],
+    });
+    expect(
+      evaluatePermission(ask, { toolName: "filesystem.write", riskLevel: "WRITE", resourcePath: ".aiharness/wiki/index.md" }).outcome,
+    ).toBe("ASK");
+
+    const deny = snapshot({
+      rules: [{ id: "deny-wiki", toolName: "filesystem.*", actionPattern: null, riskLevel: "WRITE", decision: "DENY" }],
+    });
+    expect(
+      evaluatePermission(deny, { toolName: "filesystem.write", riskLevel: "WRITE", resourcePath: ".aiharness/wiki/index.md" }).outcome,
+    ).toBe("DENY");
+  });
+});
+
 describe("policy snapshot builder", () => {
   it("builds an immutable snapshot from structural policy input", () => {
     const snap = buildPolicySnapshot({

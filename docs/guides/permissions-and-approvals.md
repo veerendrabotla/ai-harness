@@ -17,7 +17,8 @@ Documented in the header comment of `evaluate.ts:3-14` and implemented at `evalu
 1. **Explicit DENY wins.** Any rule whose `decision === "DENY"` and whose `toolName` matches (exact or wildcard) short-circuits to DENY — checked before everything else, including before an active TASK-scope approval (`evaluate.ts:51-60` vs. `evaluate.ts:67`).
 2. **An active TASK-scope approval for the same tool grants ALLOW** (`evaluate.ts:67-76`). ONCE-scope approvals are consumed by the caller before invocation and are not modeled inside the engine (`evaluate.ts:8-9`).
 3. **Most-specific non-DENY rule wins**: exact `toolName` match first (`evaluate.ts:78-106`), then `actionPattern` wildcard (`evaluate.ts:108-124`).
-4. **Risk-based defaults when nothing matches** (`evaluate.ts:16-27`):
+4. **Pre-approved repo-wiki zone**: if no rule matched and the request is `filesystem.write` / `filesystem.create` with a target inside `.aiharness/wiki/`, the verdict is `ALLOW` (see below).
+5. **Risk-based defaults when nothing matches** (`evaluate.ts:16-27`):
 
 | Risk level | Default | Reason string |
 |---|---|---|
@@ -46,6 +47,17 @@ Two escalations force ASK even when policy says ALLOW:
 - The DENY rule is evaluated first, so no approval, TASK-scope grant, or ALLOW rule can override it inside the same snapshot.
 - The runtime never creates an approval request on DENY — there is no "approve anyway" path. `orchestrator.ts:667-683` marks the tool call `DENIED`, publishes `TOOL_DENIED` with `decision.reason`, then either replans (`replanAfterFailure`) or fails the run.
 - The only remedy is changing the workspace policy rule, so the next evaluation sees different rules.
+
+### Pre-approved repo-wiki zone
+
+`filesystem.write` and `filesystem.create` targeting a path inside `.aiharness/wiki/` return `ALLOW` without needing a rule (`evaluate.ts`, checked after explicit rules and before the risk defaults). This is what lets run maintenance and agent-authored topic pages proceed unattended — see the [Wiki Guide](wiki.md). Guardrails:
+
+- Explicit `DENY`/`ASK` **rules still win** — the zone only applies when nothing matched.
+- `.env` / `.env.*` writes inside the zone still escalate to `ASK`.
+- `..` traversal, the `.aiharness/wiki` prefix without a separator (`.aiharness/wikifoo/...`), and every tool other than `filesystem.write` / `filesystem.create` fall through to the normal defaults.
+- The executors additionally confine all paths to the project root — the zone is a convenience layer, not the boundary.
+
+To gate wiki writes after all, add an explicit `ASK` or `DENY` rule for `filesystem.write` in workspace policy.
 
 ### Companion resource engine
 

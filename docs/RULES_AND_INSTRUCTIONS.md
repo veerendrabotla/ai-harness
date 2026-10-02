@@ -232,6 +232,7 @@ Stated plainly, because docs from other tools assume these exist:
 |---|---|---|
 | `AGENTS.md` / `CLAUDE.md` auto-read | ❌ Not read; zero code references; none in this repo | Workspace instructions (tier 2) |
 | Repo/project-scoped rule files | ❌ No project instructions field at all | Workspace instructions + per-task constraints |
+| Living docs auto-maintained in-repo (Qoder Repo Wiki) | ✅ `.aiharness/wiki/` is **written** by runs (generated index/changelog + agent topic pages) but **never read** into prompts — output, not steering | Topic pages for humans; workspace instructions for steering |
 | Per-file glob rules | ❌ No file-path rule matching | Constraints ("only touch X/**"); `.env` writes escalate automatically |
 | Knowledge base auto-injected into prompts | ❌ Knowledge is search-only (UI/API) | Paste the snippet into constraints or instructions |
 | Frontmatter in rules files | ❌ No frontmatter parser anywhere | n/a — see matrix below |

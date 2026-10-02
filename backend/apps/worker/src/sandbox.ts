@@ -152,7 +152,14 @@ export function buildCompositeResolver(
               const tmpFile = path.join(tmpDir, name);
               await fs.writeFile(tmpFile, content, "utf8");
               try {
-                return await dockerRun(root, ["sh", "-c", `cp /workspace/.aiharness-tmp/${name} /workspace/${rel}`], definition.timeoutMs);
+                // mkdir the parent first: `cp` cannot create nested paths, so
+                // first writes into a fresh directory (e.g. .aiharness/wiki/)
+                // would otherwise fail on CLOUD projects.
+                return await dockerRun(
+                  root,
+                  ["sh", "-c", `mkdir -p "$(dirname "/workspace/${rel}")" && cp "/workspace/.aiharness-tmp/${name}" "/workspace/${rel}"`],
+                  definition.timeoutMs,
+                );
               } finally {
                 await fs.unlink(tmpFile).catch((err) => {
                   sandboxLog.warn({ err }, "Failed to clean temp file");
