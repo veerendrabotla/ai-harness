@@ -3302,8 +3302,35 @@ an issue with the method name + `requestId` from the thrown `SDKError.body`.
 - [Examples](docs/examples/README.md) — eight end-to-end recipes
 - [Getting Started](docs/getting-started.md) — first 30 minutes
 
-<!-- ===== SECURITY.md (247 lines) ===== -->
+<!-- ===== SECURITY.md (332 lines) ===== -->
 # AI Harness — Security Documentation
+
+## Threat Model
+
+**Assets**
+
+- Tenant data (workspaces, projects, tasks, memories, audit logs)
+- Provider credentials (model API keys) — the highest-value secret
+- The agent execution plane (arbitrary code runs on user intent)
+- The control plane (session state, platform-admin actions, billing)
+
+**Actors:** authenticated users scoped by workspace RBAC; the anonymous
+Internet (rate limits + auth on every protected route); a malicious or
+compromised model provider (model output is *untrusted input*); and a
+compromised dependency (see Supply Chain below).
+
+**Trust boundaries**
+
+1. Browser / CLI / SDK → API — JWT validation, rate limits, request-schema validation
+2. API → worker → sandbox — deny-first permission engine + approval coordinator
+3. Sandbox → network/tools — path confinement, SSRF guard, per-workspace tool policies
+4. Local bridge → preview targets — loopback-only binding + HMAC tickets
+5. API → model providers — credentials decrypted only at execution time
+
+**Non-goals:** defending against a hostile host operator (self-hosted
+deployments trust their own infrastructure) and hardware side channels (the
+sandbox uses containers with dropped capabilities and resource caps, not a
+microVM).
 
 ## Authentication
 
@@ -3441,6 +3468,30 @@ const tasks = await prisma.task.findMany({
 - Execution traces
 - Audit logs
 
+## Agent Sandbox Isolation
+
+Agent-generated code runs in Docker containers, never inside the API or
+worker process. `backend/packages/sandbox-engine` enforces, with every claim
+covered by the 22-test `docker-isolation.test.ts` suite:
+
+- **Capabilities dropped + read-only rootfs** — no privilege escalation, no
+  in-place binary patching; writes confined to the workdir
+- **Namespace isolation** — separate PID/mount namespaces; host processes are
+  invisible from inside the sandbox
+- **Environment hygiene** — host secrets are stripped from the container
+  environment; provider keys are never injected into sandboxes
+- **Process limits** — PID caps plus idle/lifetime timeouts; hung commands
+  are killed and reported as timed out, never left running
+- **Filesystem limits** — disk quota enforcement; exhaustion fails the run
+  instead of filling the host
+- **Path traversal prevention** — reads/writes outside the workspace are
+  rejected (the same policy as `confinePath` in the API layer)
+- **Cleanup** — containers and their filesystems are destroyed after runs and
+  after crashes; zombie containers are reaped
+
+`SANDBOX_MODE` selects the isolation backend; `docker` is the production
+default.
+
 ## Path Confinement
 
 Prevents directory traversal attacks:
@@ -3533,6 +3584,40 @@ const safe = fenceUntrusted(userInput);
 - Isolated preview environments
 - No access to production data
 - Automatic cleanup
+
+## Supply Chain & Build Integrity
+
+- **Blocking dependency audit in CI** — every push runs
+  `npm audit --omit=dev --audit-level=high`; any high/critical production
+  advisory fails the pipeline. Moderate advisories are tracked to their fix
+  (today's known residue: a `google-auth-library` major-chain — `gaxios` and
+  `uuid` moderates that only clear on the next major bump)
+- **Lockfile installs only** — CI and images install from
+  `package-lock.json` (`npm ci`), never from floating ranges; root
+  `overrides` pin a patched `postcss` under `next`
+- **Reproducible production bundles** — images build the esbuild backend
+  bundles in-image from the same lockfile; `tsx` is dev-only and never ships
+- **Version-pinned base images** (`postgres:17.4`, `redis:7.4`, `node:22`),
+  rebuilt and boot-tested by the CI `docker` job on every push
+- **No secrets at build time** — images carry no keys; runtime injects
+  environment (compose `env_file`, CI services) and `setup-env.mjs`
+  generates fresh per-deployment secrets
+
+## Governance & Enterprise Controls
+
+Deeper material — SSO/SCIM integration, org-wide policy, audit-retention
+configuration, data export/backup, and deployment checklists — lives in
+[ENTERPRISE_SETUP.md](docs/ENTERPRISE_SETUP.md); SECURITY.md stays focused on
+the technical control surface. Highlights:
+
+- **Audit retention** is configurable per organization
+  (`audit_retention_settings`); audit logs are exportable
+- **Data portability** — workspace backups (`workspace_backups`) and
+  session/task exports (`session_exports`, `session_shares`) with expiry
+- **Enterprise SSO** — SAML with signature verification and domain-based
+  auto-provisioning (see Authentication → SSO/SAML)
+- AI Harness holds **no formal certification** (SOC 2 / ISO 27001);
+  ENTERPRISE_SETUP maps controls to common enterprise review questionnaires
 
 ## Vulnerability Reporting
 
@@ -4742,7 +4827,7 @@ No child agent may:
 - inherit permissions broader than its parent;
 - approve another agent's action.
 
-<!-- ===== docs/API.md (351 lines) ===== -->
+<!-- ===== docs/API.md (465 lines) ===== -->
 # AI Harness — API Reference
 
 ## Base URL
@@ -4811,6 +4896,33 @@ X-RateLimit-Reset: 1699900000
 ```
 
 When exceeded, returns `429 Too Many Requests`.
+
+---
+
+## Provider Matrix
+
+Every model call goes through the adapter registry
+(`backend/packages/model-adapters/src/registry.ts`) — the application never
+imports a provider SDK directly. Credentials are stored AES-256-GCM encrypted
+and decrypted only when building the adapter reference (never logged).
+
+| `providerType` | Adapter | Credential | Base URL | Streaming | Tool proposals | Notes |
+|---|---|---|---|:---:|:---:|---|
+| `ANTHROPIC` | `AnthropicAdapter` | required | SDK default or `metadata.baseUrl` | ✓ | ✓ | Claude models |
+| `OPENAI` | `OpenAIAdapter` | required | SDK default or `metadata.baseUrl` | ✓ | ✓ | GPT models |
+| `OPENAI_COMPATIBLE` | `OpenAICompatibleAdapter` | optional | **required** (`metadata.baseUrl`) | ✓ | — | Any OpenAI-shaped endpoint (xAI, Mistral, Groq, vLLM, ...) |
+| `GOOGLE` | `GoogleAdapter` | required | optional override (`metadata.baseUrl`) | ✓ | — | Gemini |
+| `OLLAMA` | `OllamaAdapter` | none | **required** (`metadata.baseUrl`, e.g. `http://localhost:11434`) | ✓ | — | Local models |
+| `TEST` | `TestAdapter` | none | — | — | — | Deterministic; tests only — never wire a production connection to it |
+
+- Streaming is implemented natively on all five real adapters; each is
+  covered by wire-contract tests against mock provider HTTP servers
+  (`model-adapters/src/wire-contract.test.ts`).
+- Failures normalize to `AdapterError { providerType, code, retryable }` —
+  the caller (planner/worker) decides retries from `retryable`, never from
+  provider-specific error shapes.
+- `GET /v1/providers/:id/health` probes a connection;
+  `metadata.healthCheckModel` selects the probe model.
 
 ---
 
@@ -5082,6 +5194,93 @@ socket.on("task:event", (event) => {
 | `DEPLOYMENT_STARTED` | `Deployment` | Deployment initiated |
 | `DEPLOYMENT_COMPLETED` | `Deployment` | Deployment succeeded |
 | `DEPLOYMENT_FAILED` | `Deployment` | Deployment failed |
+
+## Usage & Cost Analytics
+
+All usage endpoints require a bearer token; workspace-scoped calls also
+require at least `VIEWER` on that workspace. Rows come from `usage_records`
+— one per model call, written by the worker with provider-reported token
+counts and an `estimatedCost`.
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/v1/usage` | Summary for the caller (optional `workspaceId`, `startDate`, `endDate`): `inputTokens`, `outputTokens`, `totalTokens`, `estimatedCost`, `totalCalls` |
+| `GET` | `/v1/usage/by-model` | Per-model token/cost breakdown |
+| `GET` | `/v1/usage/by-task` | Per-task usage |
+| `GET` | `/v1/usage/trend` | Time series for charting |
+| `GET` | `/v1/usage/cost-summary` | Rolled-up estimated cost |
+| `GET` | `/v1/usage/cost-breakdown` | Cost split by model/task |
+| `GET` | `/v1/usage/cost-alerts` | Configured budget alerts |
+| `GET` | `/v1/usage/analytics/daily` | Daily aggregates |
+| `GET` | `/v1/usage/analytics/monthly` | Monthly aggregates |
+| `GET` | `/v1/usage/anomalies` | Statistical anomaly detection on spend |
+| `GET` | `/v1/usage/quota` | Quota/limit state |
+
+**Vocabulary:** *tokens* are the provider-reported input/output/total counts;
+*estimatedCost* multiplies those counts by the model's price card — it is an
+estimate, never an invoice (price cards live in
+[MODELS_AND_PRICING.md](MODELS_AND_PRICING.md)); *quota* is the configured
+spend/call ceiling; *cost alerts* fire before a quota is breached;
+*anomalies* flags statistically abnormal spend spikes.
+
+## Billing & Subscriptions
+
+Stripe-backed and env-gated (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`).
+`POST /v1/billing/webhook` verifies the Stripe signature before acting.
+`GET /v1/billing/subscription` is the source of truth the UI reads after
+checkout, cancel, or reactivate callbacks land.
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/v1/billing/plans` | Plan catalog |
+| `GET` | `/v1/billing/subscription` | Current subscription for the caller |
+| `GET` | `/v1/billing/subscriptions` | Subscriptions list (org/admin scope) |
+| `POST` | `/v1/billing/checkout` | Create a Stripe checkout session |
+| `POST` | `/v1/billing/portal` | Stripe customer-portal session |
+| `POST` | `/v1/billing/subscription/cancel` | Cancel at period end |
+| `POST` | `/v1/billing/subscription/reactivate` | Undo a pending cancellation |
+| `POST` | `/v1/billing/webhook` | Stripe webhook (signature-verified, public) |
+
+## Recipes — curl, CLI, SDK
+
+### curl
+
+```bash
+# 1. Login — envelope: { data: { accessToken, ... } }
+TOKEN=$(curl -s http://localhost:4000/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"you@example.com","password":"your-password"}' \
+  | jq -r .data.accessToken)
+
+# 2. Authenticated call
+curl -s http://localhost:4000/v1/workspaces \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### CLI (`aiharness`)
+
+```bash
+export AI_HARNESS_URL=http://localhost:4000   # default
+export AI_HARNESS_TOKEN=$TOKEN                # env-only config; no config file
+
+aiharness health
+aiharness plan "Add retry logic" --project "$PROJECT_ID"
+aiharness events "$TASK_ID"                   # live stream until terminal state
+```
+
+Full reference: [CLI_GUIDE.md](../CLI_GUIDE.md) (every command, flag, exit code).
+
+### SDK (`@ai-harness/sdk`)
+
+```ts
+import { AiHarnessClient } from "@ai-harness/sdk";
+
+const client = new AiHarnessClient({ baseUrl: "http://localhost:4000", token: TOKEN });
+const workspaces = await client.listWorkspaces();
+const task = await client.createTask({ goal: "Run tests, fail on errors", projectId });
+```
+
+Full reference: [SDK_GUIDE.md](../SDK_GUIDE.md) (recipe catalog, error handling, polling).
 
 ## Error Codes
 
@@ -6674,9 +6873,9 @@ Related: [Load report](../backend/load-tests/multi-instance-report.md) ·
 |---|----------|:-----:|------------------:|:------:|
 | 8 | `CLI_GUIDE.md` | Single-page CLI Bible + JSON schema + permissions globs | 156 → 500 | ✅ 476 lines |
 | 9 | `SDK_GUIDE.md` | Hub-spoke arch + multi-surface quickstart + recipes | 206 → 600 | ✅ 558 lines |
-| 10 | `SECURITY.md` | + governance/compliance (Codex) + enterprise matrix (Devin) | 247 → 500 | 🟡 governance/compliance delivered in `docs/ENTERPRISE_SETUP.md` (472) instead; SECURITY deep-dive expansion deferred |
+| 10 | `SECURITY.md` | + governance/compliance (Codex) + enterprise matrix (Devin) | 247 → 500 | ✅ 332 lines: threat model, agent sandbox isolation (all claims mapped to the 22-test `docker-isolation` suite), blocking CI supply-chain gate, governance cross-ref — enterprise depth delivered in `docs/ENTERPRISE_SETUP.md` (472) instead of duplicating it |
 | 11 | `EXTENSION_GUIDE.md` | + Skills vs Artifacts vs Routines taxonomy (Claude vs Devin vs Lovable) | 257 → 500 | ✅ 470 lines incl. taxonomy |
-| 12 | `docs/API.md` | + provider matrix + billing vocabulary + per-tool tabs | 307 → 600 | 🟡 351 lines; provider-matrix/billing/per-tool tabs not expanded |
+| 12 | `docs/API.md` | + provider matrix + billing vocabulary + per-tool tabs | 307 → 600 | ✅ 465 lines: provider matrix (6 adapter types, streaming/tool columns from source), usage + billing sections (11 + 8 real routes), curl/CLI/SDK recipes (plain-markdown sections — this site has no tab widget) |
 | 13 | `docs/ENTERPRISE_SETUP.md` | New: SSO/SCIM/deployment/compliance (from SECURITY.md + Codex/Devin) | 0 → 500 | ✅ 472 lines |
 | 14 | `CHANGELOG.md` | Weekly digests, versioned, feature maturity badges | 0 → 400 | ✅ v0.1.0 entry (dated 2026-10-01); weekly digests start with the first release |
 

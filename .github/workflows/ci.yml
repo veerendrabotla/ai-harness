@@ -114,7 +114,7 @@ jobs:
           cache: npm
       - run: npm ci --no-audit --no-fund
       - name: Audit production dependencies
-        run: npm audit --omit=dev || true
+        run: npm audit --omit=dev --audit-level=high
 
   docker:
     name: Docker compose boot health

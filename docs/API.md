@@ -69,6 +69,33 @@ When exceeded, returns `429 Too Many Requests`.
 
 ---
 
+## Provider Matrix
+
+Every model call goes through the adapter registry
+(`backend/packages/model-adapters/src/registry.ts`) — the application never
+imports a provider SDK directly. Credentials are stored AES-256-GCM encrypted
+and decrypted only when building the adapter reference (never logged).
+
+| `providerType` | Adapter | Credential | Base URL | Streaming | Tool proposals | Notes |
+|---|---|---|---|:---:|:---:|---|
+| `ANTHROPIC` | `AnthropicAdapter` | required | SDK default or `metadata.baseUrl` | ✓ | ✓ | Claude models |
+| `OPENAI` | `OpenAIAdapter` | required | SDK default or `metadata.baseUrl` | ✓ | ✓ | GPT models |
+| `OPENAI_COMPATIBLE` | `OpenAICompatibleAdapter` | optional | **required** (`metadata.baseUrl`) | ✓ | — | Any OpenAI-shaped endpoint (xAI, Mistral, Groq, vLLM, ...) |
+| `GOOGLE` | `GoogleAdapter` | required | optional override (`metadata.baseUrl`) | ✓ | — | Gemini |
+| `OLLAMA` | `OllamaAdapter` | none | **required** (`metadata.baseUrl`, e.g. `http://localhost:11434`) | ✓ | — | Local models |
+| `TEST` | `TestAdapter` | none | — | — | — | Deterministic; tests only — never wire a production connection to it |
+
+- Streaming is implemented natively on all five real adapters; each is
+  covered by wire-contract tests against mock provider HTTP servers
+  (`model-adapters/src/wire-contract.test.ts`).
+- Failures normalize to `AdapterError { providerType, code, retryable }` —
+  the caller (planner/worker) decides retries from `retryable`, never from
+  provider-specific error shapes.
+- `GET /v1/providers/:id/health` probes a connection;
+  `metadata.healthCheckModel` selects the probe model.
+
+---
+
 ## Endpoints
 
 ### Authentication
@@ -337,6 +364,93 @@ socket.on("task:event", (event) => {
 | `DEPLOYMENT_STARTED` | `Deployment` | Deployment initiated |
 | `DEPLOYMENT_COMPLETED` | `Deployment` | Deployment succeeded |
 | `DEPLOYMENT_FAILED` | `Deployment` | Deployment failed |
+
+## Usage & Cost Analytics
+
+All usage endpoints require a bearer token; workspace-scoped calls also
+require at least `VIEWER` on that workspace. Rows come from `usage_records`
+— one per model call, written by the worker with provider-reported token
+counts and an `estimatedCost`.
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/v1/usage` | Summary for the caller (optional `workspaceId`, `startDate`, `endDate`): `inputTokens`, `outputTokens`, `totalTokens`, `estimatedCost`, `totalCalls` |
+| `GET` | `/v1/usage/by-model` | Per-model token/cost breakdown |
+| `GET` | `/v1/usage/by-task` | Per-task usage |
+| `GET` | `/v1/usage/trend` | Time series for charting |
+| `GET` | `/v1/usage/cost-summary` | Rolled-up estimated cost |
+| `GET` | `/v1/usage/cost-breakdown` | Cost split by model/task |
+| `GET` | `/v1/usage/cost-alerts` | Configured budget alerts |
+| `GET` | `/v1/usage/analytics/daily` | Daily aggregates |
+| `GET` | `/v1/usage/analytics/monthly` | Monthly aggregates |
+| `GET` | `/v1/usage/anomalies` | Statistical anomaly detection on spend |
+| `GET` | `/v1/usage/quota` | Quota/limit state |
+
+**Vocabulary:** *tokens* are the provider-reported input/output/total counts;
+*estimatedCost* multiplies those counts by the model's price card — it is an
+estimate, never an invoice (price cards live in
+[MODELS_AND_PRICING.md](MODELS_AND_PRICING.md)); *quota* is the configured
+spend/call ceiling; *cost alerts* fire before a quota is breached;
+*anomalies* flags statistically abnormal spend spikes.
+
+## Billing & Subscriptions
+
+Stripe-backed and env-gated (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`).
+`POST /v1/billing/webhook` verifies the Stripe signature before acting.
+`GET /v1/billing/subscription` is the source of truth the UI reads after
+checkout, cancel, or reactivate callbacks land.
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/v1/billing/plans` | Plan catalog |
+| `GET` | `/v1/billing/subscription` | Current subscription for the caller |
+| `GET` | `/v1/billing/subscriptions` | Subscriptions list (org/admin scope) |
+| `POST` | `/v1/billing/checkout` | Create a Stripe checkout session |
+| `POST` | `/v1/billing/portal` | Stripe customer-portal session |
+| `POST` | `/v1/billing/subscription/cancel` | Cancel at period end |
+| `POST` | `/v1/billing/subscription/reactivate` | Undo a pending cancellation |
+| `POST` | `/v1/billing/webhook` | Stripe webhook (signature-verified, public) |
+
+## Recipes — curl, CLI, SDK
+
+### curl
+
+```bash
+# 1. Login — envelope: { data: { accessToken, ... } }
+TOKEN=$(curl -s http://localhost:4000/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"you@example.com","password":"your-password"}' \
+  | jq -r .data.accessToken)
+
+# 2. Authenticated call
+curl -s http://localhost:4000/v1/workspaces \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### CLI (`aiharness`)
+
+```bash
+export AI_HARNESS_URL=http://localhost:4000   # default
+export AI_HARNESS_TOKEN=$TOKEN                # env-only config; no config file
+
+aiharness health
+aiharness plan "Add retry logic" --project "$PROJECT_ID"
+aiharness events "$TASK_ID"                   # live stream until terminal state
+```
+
+Full reference: [CLI_GUIDE.md](../CLI_GUIDE.md) (every command, flag, exit code).
+
+### SDK (`@ai-harness/sdk`)
+
+```ts
+import { AiHarnessClient } from "@ai-harness/sdk";
+
+const client = new AiHarnessClient({ baseUrl: "http://localhost:4000", token: TOKEN });
+const workspaces = await client.listWorkspaces();
+const task = await client.createTask({ goal: "Run tests, fail on errors", projectId });
+```
+
+Full reference: [SDK_GUIDE.md](../SDK_GUIDE.md) (recipe catalog, error handling, polling).
 
 ## Error Codes
 

@@ -187,9 +187,9 @@
 |---|----------|:-----:|------------------:|:------:|
 | 8 | `CLI_GUIDE.md` | Single-page CLI Bible + JSON schema + permissions globs | 156 → 500 | ✅ 476 lines |
 | 9 | `SDK_GUIDE.md` | Hub-spoke arch + multi-surface quickstart + recipes | 206 → 600 | ✅ 558 lines |
-| 10 | `SECURITY.md` | + governance/compliance (Codex) + enterprise matrix (Devin) | 247 → 500 | 🟡 governance/compliance delivered in `docs/ENTERPRISE_SETUP.md` (472) instead; SECURITY deep-dive expansion deferred |
+| 10 | `SECURITY.md` | + governance/compliance (Codex) + enterprise matrix (Devin) | 247 → 500 | ✅ 332 lines: threat model, agent sandbox isolation (all claims mapped to the 22-test `docker-isolation` suite), blocking CI supply-chain gate, governance cross-ref — enterprise depth delivered in `docs/ENTERPRISE_SETUP.md` (472) instead of duplicating it |
 | 11 | `EXTENSION_GUIDE.md` | + Skills vs Artifacts vs Routines taxonomy (Claude vs Devin vs Lovable) | 257 → 500 | ✅ 470 lines incl. taxonomy |
-| 12 | `docs/API.md` | + provider matrix + billing vocabulary + per-tool tabs | 307 → 600 | 🟡 351 lines; provider-matrix/billing/per-tool tabs not expanded |
+| 12 | `docs/API.md` | + provider matrix + billing vocabulary + per-tool tabs | 307 → 600 | ✅ 465 lines: provider matrix (6 adapter types, streaming/tool columns from source), usage + billing sections (11 + 8 real routes), curl/CLI/SDK recipes (plain-markdown sections — this site has no tab widget) |
 | 13 | `docs/ENTERPRISE_SETUP.md` | New: SSO/SCIM/deployment/compliance (from SECURITY.md + Codex/Devin) | 0 → 500 | ✅ 472 lines |
 | 14 | `CHANGELOG.md` | Weekly digests, versioned, feature maturity badges | 0 → 400 | ✅ v0.1.0 entry (dated 2026-10-01); weekly digests start with the first release |
 
