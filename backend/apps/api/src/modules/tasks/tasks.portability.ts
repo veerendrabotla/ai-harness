@@ -70,9 +70,9 @@ export function registerSessionPortabilityRoutes(app: FastifyInstance) {
         version: p.version,
         analysis: p.analysis,
         affectedFiles: p.affectedFiles as string[],
-        steps: (p.steps as Array<{ title: string; detail?: string; toolName?: string }>),
+        steps: (p.steps as Array<{ title: string; detail?: string; acceptanceCriteria?: string[]; toolName?: string }>),
         risks: p.risks as string[],
-        verificationPlan: (p.verificationPlan as Array<{ command: string }>),
+        verificationPlan: (p.verificationPlan as Array<{ command: string; asserts?: string[] }>),
         status: p.status,
       })),
       toolCalls: toolCalls.map((tc) => ({

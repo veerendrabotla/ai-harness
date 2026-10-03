@@ -234,7 +234,8 @@ Add pagination (cursor-based) to GET /v1/tasks.
 Verify: npm run typecheck && npx vitest run backend/apps/api/tests/tasks-pagination.test.ts
 ```
 *Why:* general→specific, format stated, verification commands given (the plan's
-`verificationPlan` mirrors them). Mode: `BUILD`.
+`verificationPlan` mirrors them, and each step's `acceptanceCriteria` must be
+asserted by one of those commands — unasserted criteria force a replan). Mode: `BUILD`.
 
 **Feature behind an interface**
 ```text

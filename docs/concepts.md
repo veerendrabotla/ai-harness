@@ -152,7 +152,7 @@ Full reference: [Tool Guide](../TOOL_GUIDE.md).
 
 ## 10. Verification and review
 
-- **Verification** executes the plan's declared verification steps (tests, lints, `terminal.run` commands, or browser checks when configured) and records structured results.
+- **Verification** executes the plan's declared verification steps (tests, lints, `terminal.run` commands, or browser checks when configured) and records structured results. Each plan step can declare **acceptance criteria** (spec-driven flow): objectively checkable claims that at least one *passing* verification command must assert via its `asserts` list — uncovered criteria fail verification and force a replan. Plans without criteria behave exactly as before.
 - **Security scan** — before a run can settle as `COMPLETED`, results are scanned for hardcoded secrets, SQL injection, XSS, code injection, and missing auth (see [Permissions & Approvals §6](guides/permissions-and-approvals.md) for the exact gating condition).
 - **Review agent** — an optional, strictly read-only model stage after implementation. It outputs blocking/non-blocking issues and a confidence statement; it **cannot modify files**. Policy flag `blockOnReviewFindings` can make findings blocking.
 

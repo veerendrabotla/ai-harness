@@ -139,20 +139,47 @@ export const planResponseSchema = {
   properties: {
     id: { type: "string" as const, format: "uuid" },
     taskId: { type: "string" as const, format: "uuid" },
-    title: { type: "string" as const },
+    runId: { type: "string" as const, format: "uuid" },
+    version: { type: "integer" as const },
+    analysis: { type: "string" as const },
+    affectedFiles: { type: "array" as const, items: { type: "string" as const } },
     steps: {
       type: "array" as const,
       items: {
         type: "object" as const,
         properties: {
-          order: { type: "integer" as const },
-          action: { type: "string" as const },
-          description: { type: "string" as const },
+          id: { type: "string" as const },
+          title: { type: "string" as const },
+          detail: { type: "string" as const },
+          acceptanceCriteria: {
+            type: "array" as const,
+            items: { type: "string" as const },
+            description: "Objectively checkable claims that must hold once the step completes.",
+          },
+          toolName: { type: "string" as const, nullable: true },
+          toolInput: { type: "object" as const, nullable: true },
+        },
+      },
+    },
+    risks: { type: "array" as const, items: { type: "string" as const } },
+    verificationPlan: {
+      type: "array" as const,
+      items: {
+        type: "object" as const,
+        properties: {
+          command: { type: "string" as const },
+          asserts: {
+            type: "array" as const,
+            items: { type: "string" as const },
+            description: "Exact acceptance-criteria text this command proves when it passes.",
+          },
         },
       },
     },
     status: { type: "string" as const },
     createdAt: { type: "string" as const, format: "date-time" },
+    approvedAt: { type: "string" as const, format: "date-time", nullable: true },
+    approvedBy: { type: "string" as const, nullable: true },
   },
 };
 

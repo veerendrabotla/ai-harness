@@ -45,6 +45,7 @@ export interface PlanStepLike {
   id: string;
   title: string;
   detail?: string;
+  acceptanceCriteria?: string[];
   toolName?: string;
 }
 
@@ -55,7 +56,7 @@ export interface PlanLike {
   affectedFiles: string[];
   steps: PlanStepLike[];
   risks: string[];
-  verificationPlan: Array<{ command: string }>;
+  verificationPlan: Array<{ command: string; asserts?: string[] }>;
   status: "DRAFT" | "APPROVED" | "REJECTED" | "SUPERSEDED";
   approvedAt: string | null;
 }

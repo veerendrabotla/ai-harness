@@ -48,7 +48,11 @@ Creates and restores project state references.
 Persists and publishes ordered runtime events.
 
 ## Verification Engine
-Runs explicit verification steps and records results.
+Runs explicit verification steps and records results. Spec-driven coverage: every
+plan-step `acceptanceCriteria` must be claimed by at least one **passing**
+verification command's `asserts`; uncovered criteria count as a verification
+failure and drive failure-driven replanning. Plans without criteria (legacy
+plans, auto-inferred command sets) are unaffected.
 
 ## Review Agent
 Optional read-only model stage after implementation.
@@ -133,9 +137,13 @@ Required plan fields:
 1. analysis;
 2. assumptions explicitly identified;
 3. affected files;
-4. ordered steps;
+4. ordered steps — each step carries 1-3 `acceptanceCriteria`: short, objectively
+   checkable claims (specific file, behavior, or output) that must hold once the
+   step completes;
 5. risk list;
-6. verification plan.
+6. verification plan — each command may list `asserts`: the exact criteria text
+   that running the command proves. Every criterion must be asserted by at least
+   one command; verification without coverage fails and forces a replan.
 
 ## Step 5: Validate plan
 Runtime validates:

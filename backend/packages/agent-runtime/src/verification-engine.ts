@@ -197,6 +197,49 @@ export class VerificationEngine {
   }
 
   /**
+   * Spec-driven assertion: returns the acceptance criteria that NO passing
+   * verification command claims to prove. Legacy behaviour is preserved —
+   * plans without criteria, plans without a declared verificationPlan
+   * (auto-inferred commands assert nothing), and empty results all return [].
+   */
+  static uncoveredCriteria(input: {
+    steps: Array<{ acceptanceCriteria?: string[] | null }>;
+    verificationPlan: Array<{ command: string; asserts?: string[] | null }>;
+    results: Array<{ command: string; status: string }>;
+  }): string[] {
+    if (!input.steps?.length || !input.verificationPlan?.length) return [];
+
+    const normalize = (text: string): string => text.trim().replace(/\s+/g, " ").toLowerCase();
+
+    const criteria = new Map<string, string>();
+    for (const step of input.steps) {
+      for (const criterion of step.acceptanceCriteria ?? []) {
+        const key = normalize(criterion);
+        if (key.length > 0 && !criteria.has(key)) criteria.set(key, criterion);
+      }
+    }
+    if (criteria.size === 0) return [];
+
+    const passedCommands = new Set(
+      input.results.filter((r) => r.status === "PASSED").map((r) => r.command),
+    );
+    const asserted = new Set<string>();
+    for (const entry of input.verificationPlan) {
+      if (!passedCommands.has(entry.command)) continue;
+      for (const claim of entry.asserts ?? []) {
+        const key = normalize(claim);
+        if (key.length > 0) asserted.add(key);
+      }
+    }
+
+    const uncovered: string[] = [];
+    for (const [key, original] of criteria) {
+      if (!asserted.has(key)) uncovered.push(original);
+    }
+    return uncovered;
+  }
+
+  /**
    * Auto-generate verification commands from a project's detected scripts.
    * Returns typecheck, lint, test, and build commands in priority order.
    */

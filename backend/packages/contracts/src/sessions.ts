@@ -63,9 +63,9 @@ export interface SessionExportPackage {
     version: number;
     analysis: string;
     affectedFiles: string[];
-    steps: Array<{ title: string; detail?: string; toolName?: string }>;
+    steps: Array<{ title: string; detail?: string; acceptanceCriteria?: string[]; toolName?: string }>;
     risks: string[];
-    verificationPlan: Array<{ command: string }>;
+    verificationPlan: Array<{ command: string; asserts?: string[] }>;
     status: string;
   }>;
   toolCalls: Array<{

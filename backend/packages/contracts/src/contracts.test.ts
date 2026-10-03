@@ -31,6 +31,43 @@ describe("plan draft contract", () => {
     expect(parsed.verificationPlan).toEqual([]);
     expect(parsed.affectedFiles).toEqual([]);
   });
+
+  it("fills acceptanceCriteria and asserts defaults for legacy-shaped plans", () => {
+    const parsed = planDraftSchema.parse({
+      analysis: "x",
+      steps: [{ id: "s1", title: "Only step" }],
+      verificationPlan: [{ command: "npm test" }],
+    });
+    expect(parsed.steps[0]?.acceptanceCriteria).toEqual([]);
+    expect(parsed.verificationPlan[0]?.asserts).toEqual([]);
+  });
+
+  it("accepts steps with acceptance criteria and commands with asserts", () => {
+    const parsed = planDraftSchema.safeParse({
+      analysis: "x",
+      steps: [{ id: "s1", title: "step", acceptanceCriteria: ["README documents the flag"] }],
+      verificationPlan: [
+        { command: "grep flag README.md", asserts: ["README documents the flag"] },
+      ],
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it("rejects empty and oversized acceptance criteria", () => {
+    expect(
+      planDraftSchema.safeParse({
+        analysis: "x",
+        steps: [{ id: "s1", title: "t", acceptanceCriteria: [""] }],
+      }).success,
+    ).toBe(false);
+    const seven = Array.from({ length: 7 }, (_, i) => `criterion ${i}`);
+    expect(
+      planDraftSchema.safeParse({
+        analysis: "x",
+        steps: [{ id: "s1", title: "t", acceptanceCriteria: seven }],
+      }).success,
+    ).toBe(false);
+  });
 });
 
 describe("task creation contract", () => {

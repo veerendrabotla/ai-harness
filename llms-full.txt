@@ -3638,7 +3638,7 @@ Report security vulnerabilities to: security@aiharness.dev
 - Sandbox escape
 - Secret exposure
 
-<!-- ===== TODO_NEXT_PHASE.md (518 lines) ===== -->
+<!-- ===== TODO_NEXT_PHASE.md (525 lines) ===== -->
 # AI Harness — Phased Roadmap & Execution Log
 
 > **Process rule:** this file is APPEND-ONLY and ITERATIVE. Completed phases are never deleted — they stay documented below as the execution record. New work is always appended as the next phase section with status `PLANNED → IN PROGRESS → DONE` plus verification evidence.
@@ -4154,9 +4154,16 @@ Prioritized from a full Qoder feature comparison; we remain ahead on the 16-stat
   - **Sandbox write fix** (`backend/apps/worker/src/sandbox.ts`): write case now `mkdir -p "$(dirname ...)"` before `cp` — nested first-writes on CLOUD_SANDBOX previously failed on fresh directories.
   - **Tests**: new `wiki-maintainer.test.ts` **23/23** (hostile-goal flattening, marker idempotency, 50-entry cap, index ownership/TOC/recent-runs, presence-gated skip, write-failure logging, extract helpers) + `permission-engine/src/evaluate.test.ts` **+7 zone tests** (zone allow, rule precedence, env escalation, traversal, prefix, non-write tools) — all green. Three test-side bugs found and fixed during bring-up: the fake `listWiki` now mirrors `ls` semantics (immediate children incl. directory names — the old filter dropped directories so presence detection never fired), the cap-test loop bound (`MAX+15` so `run-65` actually exists), and the hostile-goal assertion checks line-starts rather than substrings.
   - **Docs**: new **`docs/guides/wiki.md`** (layout/ownership, maintenance flow diagram, zone guardrails table, seeding recipes A/B, changelog/index examples, troubleshooting, 6-item FAQ); stale-claim corrections — `hooks-and-events.md` "no production handlers" → wiki subscriber + table extended to **all 11 hooks firing** with payloads/line refs (`beforeComplete` :915, `afterComplete` :930, `onReplan` :1521, `onError` :1635) and the "Declared but never fired" section removed; `EXTENSION_GUIDE.md` "zero subscribers" → one production subscriber + fixed the false "exceptions follow the run's failure path" claim (fireHooks catches); `RULES_AND_INSTRUCTIONS.md` gained an honest "written but never read into prompts" row; `permissions-and-approvals.md` gained evaluation-order step 4 + a zone subsection; index rows in `docs/README.md` Guides table and `llms.txt`.
-  - **`llms-full.txt` regenerated: 43 docs / 14,909 lines** (wiki.md auto-included; `--check` drift gate green); link check **43 sources / 0 broken** (fixed two wrong `../` depths for root-level guides and reworded two example links that sat inside a code fence — the checker scans fences).
+  - **`llms-full.txt` regenerated: 43 docs / 14,909 lines** (wiki.md auto-included; `--check` drift gate green); link check **44 sources / 0 broken** (fixed two wrong `../` depths for root-level guides and reworded two example links that sat inside a code fence — the checker scans fences).
+  - **Live vertical-slice E2E — wiki proven end-to-end on the running stack** (5 rounds; the failures found real bugs and got real fixes):
+    - **Infra bring-up**: the running stack had been recreated WITHOUT the sandbox overlay (`docker-compose.sandbox.yml`) — restored it (docker.sock + `.data/workspaces` bind mount + `SANDBOX_WORKSPACE_HOST_DIR` in the untracked `.env`, recipe per self-hosting §11), pulled `node:22`/`node:22-alpine`, rebuilt the worker image twice (second build cache-hit in 7 min) and verified the wiki code strings in the shipped bundle.
+    - **Round 1 (partial)**: task COMPLETED and `changelog.md` wrote with real run data (marker, goal, steps, verification, touched files) — but `index.md` stayed seeded: worker warn `wiki write failed for .aiharness/wiki/index.md: Tool exceeded timeout of 30000ms`. **Fix in `wiki-maintainer.ts`**: (a) `writeWithRetry` — one automatic retry after 1.5s per maintenance write (sandbox container spin-up can exceed the tool's 30s timeout under load; full-file writes are idempotent so a late first attempt is harmless); (b) first-run `changelog.md` is read only when the presence listing contains it (no more harness-level ENOENT error spam); (c) `getRecentRuns` failure now warns and still refreshes the index (enrichment must not block). **+3 unit tests (26 total)** covering exactly those three paths.
+    - **Rounds 2-4 (model flakiness, platform correct)**: failure-driven replan loops — bad git argument (`bad revision`), hallucinated `README.rst` despite constraints, and malformed tool JSON (`terminal.run_readonly VALIDATION_ERROR: ... schema validation: command`) → `MAX_REPLANS_EXCEEDED`, clean FAILED terminal every time. The e2e script was hardened meanwhile: seeds `.aiharness/wiki/`, polls index CONTENT (seed exists from t=0), re-approves replan drafts up to 4, pins the goal/constraints to `README.md`, and asserts the new goal marker.
+    - **Determinism knob**: `request.temperature` is never set anywhere in the platform (adapters pass `undefined` → Ollama default 0.8), so a local `qwen-lowtemp` model (`PARAMETER temperature 0.2`, Modelfile) was created and used for the E2E route: `npm run e2e:agent -- http://localhost:4000 qwen-lowtemp`.
+    - **Round 5 GREEN**: task `COMPLETED` (one replan, re-approved) → `>>> wiki maintained (changelog.md + index.md refreshed by afterComplete)` → generated `index.md` (topic TOC `about`, Recent-runs row with the real goal, footer `last maintained ... run 8cb08038`) and `changelog.md` (`<!-- run:8cb08038 -->` marker, goal heading, verification stats, `Touched: README.md`) verified on the host workspace, zero wiki warns in worker logs.
+    - **Full-suite contention episode**: the first full rerun failed `load.test.ts` + `docker-isolation.test.ts` (16 tests) with leftover `test-*` containers and a hanging `docker system df` (daemon overloaded by the two image builds); after removing the leftovers and pruning builder cache, both files passed solo and the **full suite reran green (63 passed, 1 skipped, EXIT 0)**. vhdx does not return freed space until Docker Desktop restarts — free space now ~0.94 GB (above the ~0.5 GB flake line, but the standing watch remains).
   - **Disk episode recurred and was cleared**: pre-test free space hit **0.12 GB** (the known <0.5 GB flake zone) → first `npm test` failed 6 integration/load/docker files; cleaned npm cache + stale `%TEMP%` + `Temp\aiharness-sandbox` (1.88 GB of test debris) → **2.65 GB free** → rerun green. Standing watch unchanged: the foreign `secure-openclaw-gateway` container remains a Docker-vhdx drain (flagged, untouched).
-  - Gates: `typecheck` 0 - `lint` 0 - **full `npm test` 64 files (63 passed, 1 skipped) EXIT 0** - link check 43 sources / 0 broken - `docs:llms-full` 43 docs / 0 drift - `npm audit --omit=dev --audit-level=high` exit 0.
+  - Gates: `typecheck` 0 - `lint` 0 - **full `npm test` 64 files (63 passed, 1 skipped) EXIT 0** (green after cleanup; the one intermediate failure was docker-daemon contention — solo + rerun both green) - link check 44 sources / 0 broken - `docs:llms-full` 43 docs / 0 drift - `npm audit --omit=dev --audit-level=high` exit 0 - **live `e2e:agent` round 5: COMPLETED + wiki maintained**.
 
 <!-- ===== TOOL_GUIDE.md (195 lines) ===== -->
 # AI Harness — Tool Guide
@@ -4355,7 +4362,7 @@ Every tool execution is logged:
 }
 ```
 
-<!-- ===== docs/AGENT_RUNTIME.md (497 lines) ===== -->
+<!-- ===== docs/AGENT_RUNTIME.md (505 lines) ===== -->
 # AI Harness — Agent Runtime Architecture
 
 # 1. PURPOSE
@@ -4406,7 +4413,11 @@ Creates and restores project state references.
 Persists and publishes ordered runtime events.
 
 ## Verification Engine
-Runs explicit verification steps and records results.
+Runs explicit verification steps and records results. Spec-driven coverage: every
+plan-step `acceptanceCriteria` must be claimed by at least one **passing**
+verification command's `asserts`; uncovered criteria count as a verification
+failure and drive failure-driven replanning. Plans without criteria (legacy
+plans, auto-inferred command sets) are unaffected.
 
 ## Review Agent
 Optional read-only model stage after implementation.
@@ -4491,9 +4502,13 @@ Required plan fields:
 1. analysis;
 2. assumptions explicitly identified;
 3. affected files;
-4. ordered steps;
+4. ordered steps — each step carries 1-3 `acceptanceCriteria`: short, objectively
+   checkable claims (specific file, behavior, or output) that must hold once the
+   step completes;
 5. risk list;
-6. verification plan.
+6. verification plan — each command may list `asserts`: the exact criteria text
+   that running the command proves. Every criterion must be asserted by at least
+   one command; verification without coverage fails and forces a replan.
 
 ## Step 5: Validate plan
 Runtime validates:
@@ -8871,7 +8886,7 @@ Expected behavior:
 2. Summarize or omit lower-priority context according to deterministic policy.
 3. Record omitted/summarized items in the context manifest.
 
-<!-- ===== docs/PROMPT_GUIDE.md (504 lines) ===== -->
+<!-- ===== docs/PROMPT_GUIDE.md (505 lines) ===== -->
 # Prompt Guide
 
 > How to write task goals, constraints, and revision instructions that make AI Harness
@@ -9108,7 +9123,8 @@ Add pagination (cursor-based) to GET /v1/tasks.
 Verify: npm run typecheck && npx vitest run backend/apps/api/tests/tasks-pagination.test.ts
 ```
 *Why:* general→specific, format stated, verification commands given (the plan's
-`verificationPlan` mirrors them). Mode: `BUILD`.
+`verificationPlan` mirrors them, and each step's `acceptanceCriteria` must be
+asserted by one of those commands — unasserted criteria force a replan). Mode: `BUILD`.
 
 **Feature behind an interface**
 ```text
@@ -11073,7 +11089,7 @@ Full reference: [Tool Guide](../TOOL_GUIDE.md).
 
 ## 10. Verification and review
 
-- **Verification** executes the plan's declared verification steps (tests, lints, `terminal.run` commands, or browser checks when configured) and records structured results.
+- **Verification** executes the plan's declared verification steps (tests, lints, `terminal.run` commands, or browser checks when configured) and records structured results. Each plan step can declare **acceptance criteria** (spec-driven flow): objectively checkable claims that at least one *passing* verification command must assert via its `asserts` list — uncovered criteria fail verification and force a replan. Plans without criteria behave exactly as before.
 - **Security scan** — before a run can settle as `COMPLETED`, results are scanned for hardcoded secrets, SQL injection, XSS, code injection, and missing auth (see [Permissions & Approvals §6](guides/permissions-and-approvals.md) for the exact gating condition).
 - **Review agent** — an optional, strictly read-only model stage after implementation. It outputs blocking/non-blocking issues and a confidence statement; it **cannot modify files**. Policy flag `blockOnReviewFindings` can make findings blocking.
 
@@ -12470,7 +12486,7 @@ These hooks are process-local: they are not exposed over HTTP or WebSocket. One 
 | `afterToolCall` | After the tool returns with `status === "SUCCEEDED"` (main step path only) | `{ toolName, toolCallId, status, failureCode }` (`orchestrator.ts:717`) |
 | `onToolError` | After the tool returns with any status other than `SUCCEEDED` — same payload as `afterToolCall` (main step path only) | `{ toolName, toolCallId, status, failureCode }` (`orchestrator.ts:717`) |
 | `beforeVerification` | After verification commands are resolved (plan's `verificationPlan` or auto-inferred), before execution | `{ commandCount }` (`orchestrator.ts:818`) |
-| `afterVerification` | After `VerificationEngine.verify()` returns, before failure-driven replanning | `{ results }` — the verification result array, each entry exposing at least `command`, `status`, `output` (`orchestrator.ts:822`, used at `orchestrator.ts:824-829`) |
+| `afterVerification` | After `VerificationEngine.verify()` returns, before failure-driven replanning | `{ results, uncoveredCriteria }` — `results` is the verification result array (each entry exposing at least `command`, `status`, `output`); `uncoveredCriteria` lists plan acceptance criteria that no passing command asserted (`orchestrator.ts:817-830`, gate used at `orchestrator.ts:831-849`) |
 | `beforeComplete` | After the security scan, immediately before the transition to `COMPLETED` | `{ planId, stepCount, securityFindings }` (`orchestrator.ts:915`) |
 | `afterComplete` | After the task state is `COMPLETED` and `RUN_COMPLETED` is published — the repo-wiki maintainer subscribes here | `{ planId, stepCount, verificationPassed }` (`orchestrator.ts:930`) |
 | `onReplan` | When a failure triggers a replan attempt | `{ attempt, failureSummary }` (`orchestrator.ts:1521`) |

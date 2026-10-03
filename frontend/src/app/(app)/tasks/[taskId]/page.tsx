@@ -323,6 +323,13 @@ export default function TaskDetailPage() {
                                 <code className="font-mono text-xs text-info">{s.toolName}</code>
                               </span>
                             ) : null}
+                            {(s.acceptanceCriteria?.length ?? 0) > 0 ? (
+                              <ul className="mt-1 list-disc pl-5 text-xs text-text-muted">
+                                {s.acceptanceCriteria!.map((c) => (
+                                  <li key={c}>{c}</li>
+                                ))}
+                              </ul>
+                            ) : null}
                           </li>
                         ))}
                       </ol>

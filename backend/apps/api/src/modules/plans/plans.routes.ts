@@ -244,9 +244,18 @@ function serializePlan(p: {
     version: p.version,
     analysis: p.analysis,
     affectedFiles: p.affectedFiles ?? [],
-    steps: p.steps ?? [],
+    // Persisted rows may predate the spec-driven flow: fill schema defaults so
+    // the wire contract always carries the declared fields.
+    steps: ((p.steps as Array<Record<string, unknown>> | null) ?? []).map((s) => ({
+      ...s,
+      detail: typeof s["detail"] === "string" ? s["detail"] : "",
+      acceptanceCriteria: Array.isArray(s["acceptanceCriteria"]) ? s["acceptanceCriteria"] : [],
+    })),
     risks: p.risks ?? [],
-    verificationPlan: p.verificationPlan ?? [],
+    verificationPlan: ((p.verificationPlan as Array<Record<string, unknown>> | null) ?? []).map((e) => ({
+      ...e,
+      asserts: Array.isArray(e["asserts"]) ? e["asserts"] : [],
+    })),
     status: p.status,
     createdAt: p.createdAt.toISOString(),
     approvedAt: p.approvedAt?.toISOString() ?? null,

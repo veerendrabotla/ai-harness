@@ -550,10 +550,18 @@ app.get("/v1/tasks/:taskId/export/markdown", {
     md += `## Plans\n\n`;
     for (const plan of plans) {
       md += `### Version ${plan.version}\n\n`;
-      const steps = plan.steps as Array<{ id: string; description: string }> | null;
+      const steps = plan.steps as Array<{
+        id: string;
+        title?: string;
+        detail?: string;
+        acceptanceCriteria?: string[];
+      }> | null;
       if (steps) {
         for (const step of steps) {
-          md += `- [ ] **${step.id}**: ${step.description}\n`;
+          md += `- [ ] **${step.id}**: ${step.title ?? ""}${step.detail ? ` — ${step.detail}` : ""}\n`;
+          for (const criterion of step.acceptanceCriteria ?? []) {
+            md += `  - [ ] ${criterion}\n`;
+          }
         }
       }
       md += `\n`;

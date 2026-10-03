@@ -458,7 +458,9 @@ export class TaskOrchestrator {
         this.traceBuilder!.addPlanStep(traceId, {
           action: step.title,
           rationale: step.detail,
-          expectedOutcome: `Step ${step.id} completed`,
+          expectedOutcome: step.acceptanceCriteria.length > 0
+            ? step.acceptanceCriteria.join("; ")
+            : `Step ${step.id} completed`,
           riskLevel: step.toolName === "terminal" || step.toolName === "filesystem.write" ? "medium" : "low",
           dependencies: [],
           status: "pending",
@@ -512,14 +514,7 @@ export class TaskOrchestrator {
       (await this.latestApprovedPlan(input.taskId)) ??
       (() => { throw errors.conflict("Execution requires an approved plan"); })();
 
-    const plan: PlanDraft = {
-      analysis: planRow.analysis,
-      assumptions: [],
-      affectedFiles: (planRow.affectedFiles as string[]) ?? [],
-      steps: (planRow.steps as PlanStep[]) ?? [],
-      risks: (planRow.risks as string[]) ?? [],
-      verificationPlan: (planRow.verificationPlan as Array<{ command: string }>) ?? [],
-    };
+    const plan: PlanDraft = hydratePlanDraft(planRow);
 
     await this.checkpoints.tryCreatePreExecution({
       taskId: input.taskId, runId, projectId: input.projectId,
@@ -558,7 +553,7 @@ export class TaskOrchestrator {
       }
       await this.fireHooks("beforeToolCall", { taskId: input.taskId, runId, projectId: input.projectId, workspaceId: input.workspaceId, payload: { toolName: pendingApproved.toolName, toolCallId: pendingApproved.id, stepId } });
       const pendingStep = this.withProjectRoot(
-        { id: stepId, title: "", detail: "", toolName: pendingApproved.toolName, toolInput },
+        { id: stepId, title: "", detail: "", acceptanceCriteria: [], toolName: pendingApproved.toolName, toolInput },
         ctx,
       );
       const result = await this.runAllowedTool(
@@ -824,13 +819,29 @@ export class TaskOrchestrator {
       root: ctx.project.rootReference,
       environment: this.executionEnvironmentFor("LOCAL_BRIDGE", ctx.project.connectionType),
     });
-    await this.fireHooks("afterVerification", { taskId: input.taskId, runId, projectId: input.projectId, workspaceId: input.workspaceId, payload: { results: verification } });
+    // Spec-driven coverage: criteria declared by plan steps must be asserted by
+    // passing verification commands (auto-inferred command sets assert nothing,
+    // so plans without a declared verificationPlan are never gated on this).
+    const uncoveredCriteria = VerificationEngine.uncoveredCriteria({
+      steps: (plan.steps as Array<{ acceptanceCriteria?: string[] }>) ?? [],
+      verificationPlan: (plan.verificationPlan as Array<{ command: string; asserts?: string[] }>) ?? [],
+      results: verification,
+    });
+    await this.fireHooks("afterVerification", { taskId: input.taskId, runId, projectId: input.projectId, workspaceId: input.workspaceId, payload: { results: verification, uncoveredCriteria } });
     // Auto-replan on verification failure (verification is not just advisory)
     const failedVerifications = verification.filter((v) => v.status === "FAILED" || v.status === "ERROR");
-    if (failedVerifications.length > 0) {
+    if (failedVerifications.length > 0 || uncoveredCriteria.length > 0) {
+      const failureSummary = [
+        ...(failedVerifications.length > 0
+          ? [`Verification failed: ${failedVerifications.map((v) => `${v.command} → ${v.output?.slice(0, 200) ?? v.status}`).join("; ")}`]
+          : []),
+        ...(uncoveredCriteria.length > 0
+          ? [`Acceptance criteria not asserted by any passing verification command: ${uncoveredCriteria.join("; ")}`]
+          : []),
+      ].join(" | ");
       const replanned = await this.replanAfterFailure(
         input, runId, ctx, budget,
-        `Verification failed: ${failedVerifications.map((v) => `${v.command} → ${v.output?.slice(0, 200) ?? v.status}`).join("; ")}`,
+        failureSummary,
       );
       if (replanned !== "PROCEED") return this.outcomeOf(replanned);
       // If replanned is PROCEED (replan budget available), re-enter loop with new plan
@@ -1130,6 +1141,9 @@ export class TaskOrchestrator {
         userObjective: [
           `Current plan step: ${step.title}`,
           step.detail ? `Step detail: ${step.detail}` : "",
+          step.acceptanceCriteria && step.acceptanceCriteria.length > 0
+            ? `Step acceptance criteria:\n${step.acceptanceCriteria.map((c) => `- ${c}`).join("\n")}`
+            : "",
           "",
           "If executing this step requires one of the available tools, call exactly one tool now with correct arguments.",
           "If the step needs no tool (pure documentation/analysis), reply with plain text and no tool call.",
@@ -1960,14 +1974,7 @@ export class TaskOrchestrator {
       where: { taskId }, orderBy: { version: "desc" },
     });
     if (!row) return null;
-    return {
-      analysis: row.analysis,
-      assumptions: [],
-      affectedFiles: (row.affectedFiles as string[]) ?? [],
-      steps: (row.steps as PlanStep[]) ?? [],
-      risks: (row.risks as string[]) ?? [],
-      verificationPlan: (row.verificationPlan as Array<{ command: string }>) ?? [],
-    } satisfies PlanDraft;
+    return hydratePlanDraft(row);
   }
 
   private async currentRunOrThrow(taskId: string) {
@@ -2304,6 +2311,43 @@ export class TaskOrchestrator {
     await this.sessionEngine.archiveSession(this.activeSessionId);
     this.activeSessionId = null;
   }
+}
+
+/**
+ * Rehydrate a persisted plan row into a PlanDraft. Rows written before the
+ * spec-driven flow lack `acceptanceCriteria` / `asserts`, so both are filled
+ * with their schema defaults (which means: never gated on coverage).
+ */
+function hydratePlanDraft(row: {
+  analysis: string;
+  affectedFiles?: unknown;
+  steps?: unknown;
+  risks?: unknown;
+  verificationPlan?: unknown;
+}): PlanDraft {
+  const steps =
+    (row.steps as Array<{
+      id: string;
+      title: string;
+      detail?: string;
+      acceptanceCriteria?: string[];
+      toolName?: string;
+      toolInput?: Record<string, unknown>;
+    }> | null) ?? [];
+  const verificationPlan =
+    (row.verificationPlan as Array<{ command: string; asserts?: string[] }> | null) ?? [];
+  return {
+    analysis: row.analysis,
+    assumptions: [],
+    affectedFiles: (row.affectedFiles as string[]) ?? [],
+    steps: steps.map((s) => ({
+      ...s,
+      detail: s.detail ?? "",
+      acceptanceCriteria: s.acceptanceCriteria ?? [],
+    })),
+    risks: (row.risks as string[]) ?? [],
+    verificationPlan: verificationPlan.map((e) => ({ command: e.command, asserts: e.asserts ?? [] })),
+  };
 }
 
 function mapExtensionRiskLevel(level: string): "READ" | "WRITE" | "DESTRUCTIVE" | "EXTERNAL" {

@@ -912,8 +912,17 @@ export default function AgentWorkspacePage(): ReactNode {
                           {draftPlan.steps.map((s, i) => (
                             <li key={s.id} className="flex items-start gap-2 text-[12px]">
                               <span className="mt-px font-mono text-[11px] text-text-muted w-4 shrink-0">{i + 1}.</span>
-                              <span className="text-text-secondary">{s.title}</span>
-                              {s.toolName && <code className="ml-1 rounded bg-surface-3 px-1 py-px text-[11px] text-info font-mono">{s.toolName}</code>}
+                              <div className="min-w-0">
+                                <span className="text-text-secondary">{s.title}</span>
+                                {s.toolName && <code className="ml-1 rounded bg-surface-3 px-1 py-px text-[11px] text-info font-mono">{s.toolName}</code>}
+                                {(s.acceptanceCriteria?.length ?? 0) > 0 && (
+                                  <ul className="mt-1 space-y-0.5">
+                                    {s.acceptanceCriteria!.map((c) => (
+                                      <li key={c} className="text-[11px] text-text-muted">✓ {c}</li>
+                                    ))}
+                                  </ul>
+                                )}
+                              </div>
                             </li>
                           ))}
                         </ol>

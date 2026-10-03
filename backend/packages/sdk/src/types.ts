@@ -42,6 +42,7 @@ export interface PlanStep {
   id: string;
   title: string;
   detail: string;
+  acceptanceCriteria: string[];
   toolName?: string;
   toolInput?: Record<string, unknown>;
 }
@@ -55,7 +56,7 @@ export interface Plan {
   affectedFiles: string[];
   steps: PlanStep[];
   risks: string[];
-  verificationPlan: Array<{ command: string }>;
+  verificationPlan: Array<{ command: string; asserts: string[] }>;
   status: "DRAFT" | "APPROVED" | "REJECTED" | "SUPERSEDED";
   createdAt: string;
   approvedAt: string | null;
