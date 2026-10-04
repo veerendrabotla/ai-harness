@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { Planner, RUNTIME_SYSTEM_INSTRUCTIONS } from "./planner.js";
+import { Planner, RUNTIME_SYSTEM_INSTRUCTIONS, linkCriteriaToAsserts } from "./planner.js";
 import type { ModelAdapter } from "@ai-harness/model-adapters";
 import type { ModelRequest, ModelResponse } from "@ai-harness/model-adapters";
 
@@ -186,5 +186,94 @@ describe("planner", () => {
     });
     expect(plan.steps[0]?.acceptanceCriteria).toEqual([]);
     expect(plan.verificationPlan).toEqual([]);
+  });
+
+  it("repairs paraphrased asserts end-to-end (observed qwen-lowtemp output)", async () => {
+    const json = JSON.stringify({
+      analysis: "a",
+      steps: [
+        {
+          id: "S1", title: "Write 'OK' to hello.txt",
+          acceptanceCriteria: [
+            "hello.txt contains exactly 'OK'",
+            "The file size of hello.txt is 4 bytes (for 'OK' in ASCII)",
+          ],
+        },
+      ],
+      verificationPlan: [
+        { command: "cat hello.txt | wc -c", asserts: ["The output is 4"] },
+        { command: "cat hello.txt", asserts: ["The output is 'OK'"] },
+      ],
+    });
+    const adapter = {
+      generate: vi.fn(async () => okPlan(json)),
+      stream: vi.fn(),
+      healthCheck: vi.fn(),
+    } as never;
+    const planner = new Planner(vi.fn() as never);
+    const plan = await planner.createPlan({
+      taskId: "t1", runId: "r1", goal: "g", constraints: null,
+      workspaceInstructions: null, adapter, route,
+      revisionInstruction: null, previousPlan: null,
+      publish: (async () => undefined) as never,
+    });
+    expect(plan.verificationPlan[0]?.asserts).toContain(
+      "The file size of hello.txt is 4 bytes (for 'OK' in ASCII)",
+    );
+    expect(plan.verificationPlan[1]?.asserts).toContain(
+      "hello.txt contains exactly 'OK'",
+    );
+    // paraphrased claims are preserved alongside the verbatim criteria
+    expect(plan.verificationPlan[0]?.asserts).toContain("The output is 4");
+  });
+});
+
+describe("linkCriteriaToAsserts", () => {
+  const paraphrasedPlan = {
+    steps: [
+      {
+        acceptanceCriteria: [
+          "hello.txt contains exactly 'OK'",
+          "The file size of hello.txt is 4 bytes (for 'OK' in ASCII)",
+        ],
+      },
+    ],
+    verificationPlan: [
+      { command: "cat hello.txt | wc -c", asserts: ["The output is 4"] },
+      { command: "cat hello.txt", asserts: ["The output is 'OK'"] },
+    ],
+  };
+
+  it("links paraphrased asserts to the original criterion text", () => {
+    const linked = linkCriteriaToAsserts(paraphrasedPlan);
+    expect(linked.verificationPlan[1]?.asserts).toContain(
+      "hello.txt contains exactly 'OK'",
+    );
+    expect(linked.verificationPlan[0]?.asserts).toContain(
+      "The file size of hello.txt is 4 bytes (for 'OK' in ASCII)",
+    );
+  });
+
+  it("is idempotent and leaves already-claimed criteria untouched", () => {
+    const once = linkCriteriaToAsserts(paraphrasedPlan);
+    const twice = linkCriteriaToAsserts(once);
+    expect(twice).toEqual(once);
+    expect(linkCriteriaToAsserts(paraphrasedPlan).verificationPlan[0]?.asserts).toHaveLength(2);
+  });
+
+  it("keeps genuinely unlinkable criteria uncovered so the gate still fires", () => {
+    const linked = linkCriteriaToAsserts({
+      steps: [{ acceptanceCriteria: ["coverage report includes fuzz corpus entry"] }],
+      verificationPlan: [{ command: "npm test", asserts: [] }],
+    });
+    expect(linked.verificationPlan[0]?.asserts).toEqual([]);
+  });
+
+  it("leaves plans without a verificationPlan unchanged (legacy behaviour)", () => {
+    const plan = {
+      steps: [{ acceptanceCriteria: ["anything"] }],
+      verificationPlan: [] as Array<{ command: string; asserts: string[] }>,
+    };
+    expect(linkCriteriaToAsserts(plan)).toBe(plan);
   });
 });

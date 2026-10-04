@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { planDraftSchema, createTaskRequestSchema, signupRequestSchema } from "./index.js";
+import {
+  planDraftSchema,
+  createTaskRequestSchema,
+  createProjectRequestSchema,
+  signupRequestSchema,
+} from "./index.js";
 
 describe("plan draft contract", () => {
   it("accepts a complete valid plan", () => {
@@ -101,6 +106,46 @@ describe("task creation contract", () => {
 
   it("enforces minimum goal length", () => {
     expect(createTaskRequestSchema.safeParse({ ...base, goal: "ab" }).success).toBe(false);
+  });
+});
+
+describe("project creation contract — empty optionals", () => {
+  const base = { name: "api-service", rootReference: "/" };
+
+  it("treats an empty repositoryUrl as absent (form default must submit)", () => {
+    const parsed = createProjectRequestSchema.safeParse({ ...base, repositoryUrl: "" });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data.repositoryUrl).toBeUndefined();
+  });
+
+  it("keeps a valid repositoryUrl", () => {
+    const parsed = createProjectRequestSchema.safeParse({
+      ...base,
+      repositoryUrl: "https://github.com/org/repo",
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data.repositoryUrl).toBe("https://github.com/org/repo");
+  });
+
+  it("still rejects malformed repositoryUrl", () => {
+    expect(createProjectRequestSchema.safeParse({ ...base, repositoryUrl: "not-a-url" }).success).toBe(false);
+  });
+
+  it("treats empty bridgeId and defaultBranch as absent", () => {
+    const parsed = createProjectRequestSchema.safeParse({
+      ...base,
+      bridgeId: "",
+      defaultBranch: "",
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.bridgeId).toBeUndefined();
+      expect(parsed.data.defaultBranch).toBeUndefined();
+    }
+  });
+
+  it("still rejects malformed bridgeId", () => {
+    expect(createProjectRequestSchema.safeParse({ ...base, bridgeId: "nope" }).success).toBe(false);
   });
 });
 

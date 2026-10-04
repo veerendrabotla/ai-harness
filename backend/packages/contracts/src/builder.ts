@@ -3,6 +3,7 @@
  * Defines templates, prompt-to-project creation, and builder-specific types.
  */
 import { z } from "zod";
+import { emptyToUndefined } from "./helpers.js";
 
 // ─── Project Templates ──────────────────────────────────────
 
@@ -41,11 +42,11 @@ export interface ProjectTemplate {
 export const promptToProjectRequestSchema = z.object({
   prompt: z.string().min(1).max(5000),
   templateId: z.string().optional(),
-  workspaceId: z.string().uuid().optional(),
+  workspaceId: emptyToUndefined(z.string().uuid()),
   projectName: z.string().min(1).max(160).optional(),
   connectionType: z.enum(["CLOUD", "LOCAL_BRIDGE"]).default("LOCAL_BRIDGE"),
-  bridgeId: z.string().uuid().optional(),
-  rootReference: z.string().min(1).max(2000).optional(),
+  bridgeId: emptyToUndefined(z.string().uuid()),
+  rootReference: emptyToUndefined(z.string().min(1).max(2000)),
   preferredFramework: z.string().optional(),
   features: z.array(z.string()).optional(),
 });

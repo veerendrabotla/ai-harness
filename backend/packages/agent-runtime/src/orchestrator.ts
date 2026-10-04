@@ -21,7 +21,8 @@ import { SelfRecoveryEngine } from "@ai-harness/self-recovery";
 import { z } from "zod";
 import { EventPublisher } from "./event-publisher.js";
 import { TaskStateService } from "./state-service.js";
-import { Planner, RUNTIME_SYSTEM_INSTRUCTIONS, persistNewPlanVersion } from "./planner.js";
+import { Planner, RUNTIME_SYSTEM_INSTRUCTIONS,
+linkCriteriaToAsserts, persistNewPlanVersion } from "./planner.js";
 import { ModelRouter } from "./model-router.js";
 import { ApprovalCoordinator } from "./approval-coordinator.js";
 import { CheckpointManager } from "./checkpoint-manager.js";
@@ -822,9 +823,12 @@ export class TaskOrchestrator {
     // Spec-driven coverage: criteria declared by plan steps must be asserted by
     // passing verification commands (auto-inferred command sets assert nothing,
     // so plans without a declared verificationPlan are never gated on this).
+    // linkCriteriaToAsserts repairs paraphrased asserts first (idempotent) so
+    // stored plans from older runs are gated on verbatim criteria as well.
+    const linkedPlan = linkCriteriaToAsserts(plan);
     const uncoveredCriteria = VerificationEngine.uncoveredCriteria({
-      steps: (plan.steps as Array<{ acceptanceCriteria?: string[] }>) ?? [],
-      verificationPlan: (plan.verificationPlan as Array<{ command: string; asserts?: string[] }>) ?? [],
+      steps: linkedPlan.steps,
+      verificationPlan: linkedPlan.verificationPlan,
       results: verification,
     });
     await this.fireHooks("afterVerification", { taskId: input.taskId, runId, projectId: input.projectId, workspaceId: input.workspaceId, payload: { results: verification, uncoveredCriteria } });

@@ -16,13 +16,6 @@ interface ModelProvider {
   models: Array<{ id: string; name: string; contextLength: number; inputPrice: number; outputPrice: number }>;
 }
 
-const PROVIDER_INFO: Record<string, { description: string; color: string }> = {
-  openai: { description: "GPT-4o, GPT-4 Turbo, o1, and more", color: "text-success" },
-  anthropic: { description: "Claude 3.5 Sonnet, Claude 3 Opus", color: "text-warning" },
-  google: { description: "Gemini 1.5 Pro, Gemini 1.5 Flash", color: "text-info" },
-  ollama: { description: "Llama 3, Mistral, and other open-source models", color: "text-brand" },
-};
-
 export default function ModelMarketplacePage() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "enabled" | "available">("all");
@@ -101,9 +94,7 @@ export default function ModelMarketplacePage() {
                     {model.enabled && <Check className="h-3.5 w-3.5 text-success" />}
                   </div>
                   <p className="mt-1 text-[11px] text-text-muted">{model.providerName}</p>
-                  <p className="mt-1 text-[11px] text-text-muted">
-                    {PROVIDER_INFO[model.providerType]?.description ?? model.providerType}
-                  </p>
+                  <p className="mt-1 text-[11px] text-text-muted">{model.id}</p>
                   <div className="mt-3 flex items-center justify-between text-[11px]">
                     <span className="text-text-muted">
                       ${(model.inputPrice * 1000).toFixed(2)}/1K input

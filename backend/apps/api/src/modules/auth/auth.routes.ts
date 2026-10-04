@@ -119,7 +119,7 @@ export default function registerAuthRoutes(app: FastifyInstance) {
       if (!raw) {
         throw errors.unauthenticated("Missing refresh token");
       }
-      const { accessToken, refreshToken } = await auth.refresh(raw);
+      const { accessToken, refreshToken, user } = await auth.refresh(raw);
       reply.setCookie(REFRESH_COOKIE, refreshToken, cookieOptions());
       reply.setCookie("session", accessToken, {
         httpOnly: true,
@@ -128,7 +128,7 @@ export default function registerAuthRoutes(app: FastifyInstance) {
         path: "/",
         maxAge: getEnv().ACCESS_TOKEN_TTL_SECONDS,
       });
-      return ok(reply, { accessToken, refreshToken });
+      return ok(reply, { user: toPublicUser(user), accessToken, refreshToken });
     } catch (err) {
       if (err instanceof AppError) throw err;
       if (err instanceof ZodError) throw err;

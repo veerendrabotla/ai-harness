@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { emptyToUndefined } from "./helpers.js";
 
 export const exportSessionRequestSchema = z.object({
   includeHistory: z.boolean().default(true),
@@ -17,14 +18,14 @@ export const importSessionRequestSchema = z.object({
 export type ImportSessionRequest = z.infer<typeof importSessionRequestSchema>;
 
 export const cloneSessionRequestSchema = z.object({
-  goal: z.string().min(4).max(20_000).optional(),
+  goal: emptyToUndefined(z.string().min(4).max(20_000)),
 });
 export type CloneSessionRequest = z.infer<typeof cloneSessionRequestSchema>;
 
 export const forkSessionRequestSchema = z.object({
   goal: z.string().min(4).max(20_000),
-  targetWorkspaceId: z.string().uuid().optional(),
-  targetProjectId: z.string().uuid().optional(),
+  targetWorkspaceId: emptyToUndefined(z.string().uuid()),
+  targetProjectId: emptyToUndefined(z.string().uuid()),
 });
 export type ForkSessionRequest = z.infer<typeof forkSessionRequestSchema>;
 

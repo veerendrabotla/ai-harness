@@ -20,6 +20,19 @@ function makeQueryClient(): QueryClient {
 
 let client: QueryClient | undefined;
 
+// Bound at module load, not inside an effect: child effects run before this
+// component's effect, so queries fired by pages on their first mount (e.g.
+// onboarding's providers/workspaces) would otherwise send no Authorization
+// header, get a 401, and silently re-authenticate before succeeding.
+bindTokenGetter(() => useAuthStore.getState().accessToken);
+bindTokenApplier((token) => {
+  if (!token) return;
+  // Refresh responses only carry a token; user stays as-is.
+  useAuthStore.setState({ accessToken: token });
+  // Reconnect the socket with the fresh token
+  reconnectSocketWithToken();
+});
+
 /**
  * Auth gate + providers. Restores the session from the refresh cookie on load
  * (deep-link friendly), redirects unauthenticated users to /login preserving
@@ -35,14 +48,6 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
   const hydrate = useAuthStore((s) => s.hydrate);
 
   React.useEffect(() => {
-    bindTokenGetter(() => useAuthStore.getState().accessToken);
-    bindTokenApplier((token) => {
-      if (!token) return;
-      // Refresh responses only carry a token; user stays as-is.
-      useAuthStore.setState({ accessToken: token });
-      // Reconnect the socket with the fresh token
-      reconnectSocketWithToken();
-    });
     // Skip hydration if the user just logged in via the login/signup pages
     // (their session is already active; calling refresh would rotate the
     // token out from under them).

@@ -44,7 +44,9 @@ export default function TaskDetailPage() {
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<unknown>(null);
 
-  // Realtime: socket events + polling fallback both invalidate this task's queries.
+  // Polling: task/events/approvals refresh while the task is active. Plans,
+  // verification, context and changes share the same cadence — a plan published
+  // after the page mounted used to be invisible until a full page reload.
 
   const taskQuery = useQuery({
     queryKey: ["task", taskId],
@@ -56,12 +58,26 @@ export default function TaskDetailPage() {
     },
   });
 
+  const activePoll = () => {
+    const state = taskQuery.data?.state;
+    return state && !["COMPLETED", "FAILED", "CANCELLED"].includes(state) ? 4000 : false;
+  };
+
   const eventsQuery = useQuery({
     queryKey: ["events", taskId],
     queryFn: async () => {
+      // Delta cursor: only rows newer than the cached max are fetched. Merge
+      // them into the cache instead of replacing it — otherwise a poll with no
+      // new rows empties the list and the tab flips back to "No activity yet".
+      const previous = qc.getQueryData<EventLike[]>(["events", taskId]) ?? [];
       const last = lastSequence(qc, taskId);
       const suffix = last >= 0 ? `?afterSequence=${last}&limit=500` : "?limit=200";
-      return apiFetch<EventLike[]>(`/v1/tasks/${taskId}/events${suffix}`);
+      const delta = await apiFetch<EventLike[]>(`/v1/tasks/${taskId}/events${suffix}`);
+      if (previous.length === 0) return delta;
+      const seen = new Set(previous.map((e) => e.id));
+      const merged = [...previous, ...delta.filter((e) => !seen.has(e.id))];
+      merged.sort((a, b) => a.sequenceNumber - b.sequenceNumber);
+      return merged;
     },
     refetchInterval: 4000,
   });
@@ -69,6 +85,7 @@ export default function TaskDetailPage() {
   const plansQuery = useQuery({
     queryKey: ["plans", taskId],
     queryFn: () => apiFetch<PlanLike[]>(`/v1/tasks/${taskId}/plans`),
+    refetchInterval: activePoll,
   });
 
   const approvalsQuery = useQuery({
@@ -83,6 +100,7 @@ export default function TaskDetailPage() {
       apiFetch<Array<{ id: string; command: string; status: string; outputReference: string | null }>>(
         `/v1/tasks/${taskId}/verification`,
       ),
+    refetchInterval: activePoll,
   });
 
   const contextQuery = useQuery({
@@ -91,6 +109,16 @@ export default function TaskDetailPage() {
       apiFetch<Array<{ id: string; stage: string; estimatedTokens: number; manifest: { items: Array<{ identifier: string; sourceType: string; inclusionReason: string }>; omitted: unknown[]; usedBytes: number; budgetBytes: number } }>>(
         `/v1/tasks/${taskId}/context`,
       ),
+    refetchInterval: activePoll,
+  });
+
+  const changesQuery = useQuery({
+    queryKey: ["changes", taskId],
+    queryFn: () =>
+      apiFetch<Array<{ id: string; toolName: string; status: string; inputSummary: unknown; resultSummary: unknown }>>(
+        `/v1/tasks/${taskId}/changes`,
+      ),
+    refetchInterval: activePoll,
   });
 
   const invalidateAll = () => {
@@ -100,6 +128,7 @@ export default function TaskDetailPage() {
     void qc.invalidateQueries({ queryKey: ["approvals", taskId] });
     void qc.invalidateQueries({ queryKey: ["verification", taskId] });
     void qc.invalidateQueries({ queryKey: ["context", taskId] });
+    void qc.invalidateQueries({ queryKey: ["changes", taskId] });
   };
 
   async function act(path: string, json?: unknown) {
@@ -490,10 +519,43 @@ export default function TaskDetailPage() {
             ) : null}
 
             {tab === "changes" ? (
-              <EmptyState
-                what="No file changes"
-                why="Changes produced during execution appear here once write tools are enabled through the Local Bridge or Cloud Sandbox."
-              />
+              <section className="space-y-3">
+                {(changesQuery.data ?? []).length === 0 ? (
+                  <EmptyState
+                    what="No file changes"
+                    why="Changes produced during execution appear here once write tools are enabled through the Local Bridge or Cloud Sandbox."
+                  />
+                ) : null}
+                {(changesQuery.data ?? []).map((c) => {
+                  const input = (c.inputSummary ?? null) as Record<string, unknown> | null;
+                  const filePath =
+                    input && typeof input === "object" && typeof (input.path ?? input.filePath) === "string"
+                      ? ((input.path ?? input.filePath) as string)
+                      : null;
+                  const statusClass =
+                    c.status === "SUCCEEDED"
+                      ? "bg-success/15 text-success"
+                      : c.status === "FAILED"
+                        ? "bg-danger/15 text-danger"
+                        : "bg-surface-3 text-text-muted";
+                  return (
+                    <Card key={c.id}>
+                      <div className="flex items-center gap-2">
+                        <code className="font-mono text-xs text-info">{c.toolName}</code>
+                        {filePath ? <span className="font-mono text-xs text-text-primary">{filePath}</span> : null}
+                        <span className={`ml-auto rounded px-1.5 py-0.5 text-[11px] font-medium ${statusClass}`}>{c.status}</span>
+                      </div>
+                      {c.inputSummary != null ? (
+                        <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-all rounded bg-surface-2 p-2 font-mono text-xs text-text-secondary">
+                          {typeof c.inputSummary === "string"
+                            ? c.inputSummary.slice(0, 400)
+                            : JSON.stringify(c.inputSummary, null, 2).slice(0, 400)}
+                        </pre>
+                      ) : null}
+                    </Card>
+                  );
+                })}
+              </section>
             ) : null}
 
             {tab === "branches" ? <TaskBranches taskId={taskId} /> : null}

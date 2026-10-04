@@ -30,12 +30,19 @@ export default function registerUsageRoutes(app: FastifyInstance) {
         200: {
           type: "object",
           properties: {
-            inputTokens: { type: "integer" },
-            outputTokens: { type: "integer" },
-            totalTokens: { type: "integer" },
-            estimatedCost: { type: "number" },
-            totalCalls: { type: "integer" },
+            data: {
+              type: "object",
+              properties: {
+                inputTokens: { type: "integer" },
+                outputTokens: { type: "integer" },
+                totalTokens: { type: "integer" },
+                estimatedCost: { type: "number" },
+                totalCalls: { type: "integer" },
+              },
+            },
+            requestId: { type: "string" },
           },
+          required: ["data"],
         },
       },
     },
@@ -94,19 +101,26 @@ export default function registerUsageRoutes(app: FastifyInstance) {
       },
       response: {
         200: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              modelIdentifier: { type: "string" },
-              providerType: { type: "string" },
-              inputTokens: { type: "integer" },
-              outputTokens: { type: "integer" },
-              totalTokens: { type: "integer" },
-              estimatedCost: { type: "number" },
-              callCount: { type: "integer" },
+          type: "object",
+          properties: {
+            data: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  modelIdentifier: { type: "string" },
+                  providerType: { type: "string" },
+                  inputTokens: { type: "integer" },
+                  outputTokens: { type: "integer" },
+                  totalTokens: { type: "integer" },
+                  estimatedCost: { type: "number" },
+                  callCount: { type: "integer" },
+                },
+              },
             },
+            requestId: { type: "string" },
           },
+          required: ["data"],
         },
       },
     },
@@ -170,19 +184,26 @@ export default function registerUsageRoutes(app: FastifyInstance) {
       },
       response: {
         200: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              taskId: { type: "string", format: "uuid" },
-              taskGoal: { type: "string" },
-              inputTokens: { type: "integer" },
-              outputTokens: { type: "integer" },
-              totalTokens: { type: "integer" },
-              estimatedCost: { type: "number" },
-              callCount: { type: "integer" },
+          type: "object",
+          properties: {
+            data: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  taskId: { type: ["string", "null"], format: "uuid" },
+                  taskGoal: { type: "string" },
+                  inputTokens: { type: "integer" },
+                  outputTokens: { type: "integer" },
+                  totalTokens: { type: "integer" },
+                  estimatedCost: { type: "number" },
+                  callCount: { type: "integer" },
+                },
+              },
             },
+            requestId: { type: "string" },
           },
+          required: ["data"],
         },
       },
     },
@@ -255,18 +276,25 @@ export default function registerUsageRoutes(app: FastifyInstance) {
       },
       response: {
         200: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              date: { type: "string", format: "date" },
-              inputTokens: { type: "integer" },
-              outputTokens: { type: "integer" },
-              totalTokens: { type: "integer" },
-              estimatedCost: { type: "number" },
-              callCount: { type: "integer" },
+          type: "object",
+          properties: {
+            data: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  date: { type: "string", format: "date" },
+                  inputTokens: { type: "integer" },
+                  outputTokens: { type: "integer" },
+                  totalTokens: { type: "integer" },
+                  estimatedCost: { type: "number" },
+                  callCount: { type: "integer" },
+                },
+              },
             },
+            requestId: { type: "string" },
           },
+          required: ["data"],
         },
       },
     },

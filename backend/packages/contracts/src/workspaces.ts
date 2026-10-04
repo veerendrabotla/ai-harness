@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { executionModeSchema, workspaceRoleSchema } from "./enums.js";
+import { emptyToUndefined } from "./helpers.js";
 
 // ── Workspaces ───────────────────────────────────────────────
 
@@ -38,12 +39,12 @@ export type UpdateMemberRequest = z.infer<typeof updateMemberRequestSchema>;
 export const createProjectRequestSchema = z.object({
   name: z.string().min(1).max(160),
   connectionType: z.enum(["CLOUD", "LOCAL_BRIDGE"]).default("CLOUD"),
-  repositoryUrl: z.string().url().max(2000).optional(),
+  repositoryUrl: emptyToUndefined(z.string().url().max(2000)),
   // "/" = workspace/project root. Optional in the SDK contract; CLOUD projects
   // store it as-is and LOCAL_BRIDGE callers should send their registered root.
   rootReference: z.string().min(1).max(2000).default("/"),
-  defaultBranch: z.string().max(255).optional(),
-  bridgeId: z.string().uuid().optional(),
+  defaultBranch: emptyToUndefined(z.string().max(255)),
+  bridgeId: emptyToUndefined(z.string().uuid()),
 });
 export type CreateProjectRequest = z.infer<typeof createProjectRequestSchema>;
 

@@ -217,7 +217,7 @@ export class Planner {
           });
           const parsed = planDraftSchema.safeParse(extractJson(response.text));
           if (parsed.success) {
-            return parsed.data;
+            return linkCriteriaToAsserts(parsed.data);
           }
           lastError = new Error(
             `Plan schema validation failed: ${parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`,
@@ -248,6 +248,110 @@ export class Planner {
     failure.name = FAILURE_CODES.PLAN_VALIDATION_FAILED;
     throw failure;
   }
+}
+
+/** Words that carry no evidence when matching criteria to verification claims. */
+const LINK_STOPWORDS = new Set([
+  "the", "a", "an", "is", "are", "was", "were", "be", "been", "of", "for", "to", "in",
+  "on", "at", "by", "with", "and", "or", "not", "it", "its", "this", "that", "as",
+  "from", "into", "than", "then", "per", "via", "when", "once",
+]);
+
+/**
+ * Significant tokens for coverage linking: lowercase, split on punctuation
+ * except `.`, `+`, `-` (so `hello.txt`, `dry-run`, `c++` stay intact), trailing
+ * `.`/`-` trimmed, single non-numeric tokens dropped, stopwords removed.
+ */
+function linkTokens(text: string): string[] {
+  return text
+    .toLowerCase()
+    .split(/[^a-z0-9.+-]+/)
+    .map((t) => t.replace(/^[.-]+/, "").replace(/[.-]+$/, ""))
+    .filter((t) => (t.length >= 2 || /\d/.test(t)) && !LINK_STOPWORDS.has(t));
+}
+
+/**
+ * Spec-driven repair for paraphrased asserts: the coverage gate
+ * (VerificationEngine.uncoveredCriteria) matches step acceptanceCriteria to
+ * verificationPlan.asserts by exact normalized text, but models — especially
+ * small local ones — often paraphrase ("The output is 4") instead of copying
+ * the criterion verbatim, which would falsely mark criteria uncovered and
+ * force an approval-replan loop.
+ *
+ * Appends each unclaimed criterion (original text) to the verification entry
+ * whose command+asserts tokens overlap it most, requiring ≥2 shared tokens or
+ * ≥50% of the criterion's tokens; numeric-token matches win ties. Criteria
+ * with no plausible entry stay uncovered so the gate still fires. Idempotent;
+ * only affects plans that declare a verificationPlan (legacy plans and
+ * auto-inferred command sets are untouched).
+ */
+export function linkCriteriaToAsserts<P extends {
+  steps: Array<{ acceptanceCriteria?: string[] | null }>;
+  verificationPlan: Array<{ command: string; asserts?: string[] | null }>;
+}>(plan: P): P {
+  const entries = plan.verificationPlan ?? [];
+  if (!plan.steps?.length || entries.length === 0) return plan;
+
+  const normalize = (t: string): string => t.trim().replace(/\s+/g, " ").toLowerCase();
+  const claimed = new Set<string>();
+  for (const entry of entries) {
+    for (const assertText of entry.asserts ?? []) {
+      const key = normalize(assertText);
+      if (key) claimed.add(key);
+    }
+  }
+
+  const unclaimed: string[] = [];
+  const seen = new Set<string>();
+  for (const step of plan.steps) {
+    for (const criterion of step.acceptanceCriteria ?? []) {
+      const key = normalize(criterion);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      if (!claimed.has(key)) unclaimed.push(criterion);
+    }
+  }
+  if (unclaimed.length === 0) return plan;
+
+  // Score candidates from the ORIGINAL entries so earlier links cannot skew later ones.
+  const candidateTokens = entries.map(
+    (entry) => new Set(linkTokens(`${entry.command} ${(entry.asserts ?? []).join(" ")}`)),
+  );
+  const repaired = entries.map((entry) => ({ ...entry, asserts: [...(entry.asserts ?? [])] }));
+
+  let changed = false;
+  for (const criterion of unclaimed) {
+    const critTokens = linkTokens(criterion);
+    if (critTokens.length === 0) continue;
+    const critNums = critTokens.filter((t) => /\d/.test(t));
+    let best = -1;
+    let bestScore = 0;
+    let bestNums = -1;
+    for (let i = 0; i < candidateTokens.length; i++) {
+      const candidate = candidateTokens[i]!;
+      let matched = 0;
+      let nums = 0;
+      for (const token of critTokens) {
+        if (candidate.has(token)) {
+          matched += 1;
+          if (critNums.includes(token)) nums += 1;
+        }
+      }
+      if (matched < 2 && matched * 2 < critTokens.length) continue;
+      if (matched > bestScore || (matched === bestScore && nums > bestNums)) {
+        best = i;
+        bestScore = matched;
+        bestNums = nums;
+      }
+    }
+    if (best < 0) continue;
+    const target = repaired[best]!;
+    if (target.asserts!.length >= 6) continue; // schema cap on asserts
+    target.asserts!.push(criterion);
+    changed = true;
+  }
+
+  return changed ? { ...plan, verificationPlan: repaired } : plan;
 }
 
 /** Persists a validated plan draft as the next immutable version. */
