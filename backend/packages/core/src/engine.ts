@@ -185,12 +185,22 @@ export function createEngine(config: EngineConfig): Engine {
     },
 
     async approveTool(taskId: string, approvalId: string, userId: string): Promise<void> {
-      await runtime.approvals.resolve({ approvalId, userId, approved: true });
+      try {
+        await runtime.approvals.resolve({ approvalId, userId, approved: true });
+      } catch (err) {
+        // An expired approval behaves like a denial: still resume the run so
+        // it can replan instead of hanging in WAITING_FOR_TOOL_APPROVAL.
+        if ((err as { code?: string }).code !== "APPROVAL_EXPIRED") throw err;
+      }
       await runtime.orchestrator.continueAfterToolDecision({ taskId });
     },
 
     async denyTool(taskId: string, approvalId: string, userId: string): Promise<void> {
-      await runtime.approvals.resolve({ approvalId, userId, approved: false });
+      try {
+        await runtime.approvals.resolve({ approvalId, userId, approved: false });
+      } catch (err) {
+        if ((err as { code?: string }).code !== "APPROVAL_EXPIRED") throw err;
+      }
       await runtime.orchestrator.continueAfterToolDecision({ taskId });
     },
 

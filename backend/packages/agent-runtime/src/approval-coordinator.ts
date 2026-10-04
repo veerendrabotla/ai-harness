@@ -67,9 +67,17 @@ export class ApprovalCoordinator {
       throw errors.conflict(`Approval already resolved (${approval.status})`);
     }
     if (approval.expiresAt.getTime() < Date.now()) {
-      await this.prisma.approvalRequest.update({
-        where: { id: approval.id },
-        data: { status: "EXPIRED" },
+      await this.prisma.$transaction(async (tx) => {
+        await tx.approvalRequest.update({
+          where: { id: approval.id },
+          data: { status: "EXPIRED" },
+        });
+        if (approval.toolCallId) {
+          await tx.toolCall.updateMany({
+            where: { id: approval.toolCallId, status: "WAITING_APPROVAL" },
+            data: { status: "DENIED" },
+          });
+        }
       });
       await this.events.publishAndEmit({
         taskId: approval.taskId,

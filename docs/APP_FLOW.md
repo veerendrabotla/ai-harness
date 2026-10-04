@@ -334,7 +334,7 @@ Create task -> Project health check -> Reject execution -> Show reconnect action
 Model invocation -> Provider failure -> Check configured fallback -> Use fallback or fail stage.
 
 ## Approval expired
-Pending approval -> Expiration -> Pending action invalidated -> New approval required.
+Pending approval -> Expiration -> Pending action invalidated -> Run resumes via `continue-after-tool-decision` -> Treat as denial (replan) -> New approval required.
 
 ## Data missing
 Required entity lookup -> Not found -> Return `404` -> No fallback to another workspace/entity.
@@ -424,6 +424,7 @@ The system must never:
 │       ├── changes
 │       ├── verification
 │       └── approvals
+├── schedules
 ├── models
 │   ├── providers
 │   └── routing
@@ -441,3 +442,33 @@ The system must never:
     ├── providers
     └── bridges
 ```
+
+# 18. SCHEDULED TASKS FLOW
+
+Scheduled tasks turn a goal into a recurring (or rapid-interval) agent run without a human clicking "Create task".
+
+1. User opens `/schedules` and selects **New schedule**.
+2. User picks workspace + project, enters name and goal, and chooses a cadence:
+   - `EVERY_MINUTES` — every N minutes (N ≥ 1)
+   - `HOURLY` — at minute M of every hour
+   - `DAILY` — at HH:MM every day
+   - `WEEKLY` — at HH:MM on a given weekday
+   All cadences are UTC. The API computes `nextRunAt` and stores the row in `task_schedules`.
+3. The worker's 30-second sweep finds enabled schedules with `nextRunAt <= now`.
+4. The sweep atomically claims each schedule (conditional update advancing `nextRunAt`) so
+   concurrent workers can never double-fire it.
+5. Overlap guard: if the previously fired task is still non-terminal, this cycle is skipped
+   (the advanced `nextRunAt` still prevents re-fire spam).
+6. The sweep creates a task in `QUEUED` exactly like `POST /v1/tasks` (state persisted first),
+   emits `RUN_STARTED` (actor `SYSTEM`, note `scheduled task queued`), and enqueues the
+   `start` job on the task-lifecycle queue.
+7. The task proceeds through the normal pipeline — planning, approval gates, execution,
+   verification — and completion/failure triggers the usual in-app + email notifications.
+8. `lastRunAt` / `lastTaskId` are recorded on the schedule so `/schedules` can link to the
+   most recent run.
+9. Pausing (`enabled=false`) stops future fires; re-enabling recomputes `nextRunAt` so an
+   overdue schedule never bursts. Deleting removes the row (completed tasks are untouched).
+
+Guard rails: a schedule whose project is no longer `AVAILABLE` is skipped with a warning;
+an invalid persisted cadence is logged and skipped; a failed enqueue leaves the task
+`QUEUED` for the worker's orphan sweeper to recover.

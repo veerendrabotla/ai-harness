@@ -4,7 +4,11 @@ A **model-independent agentic development environment**: a PWA control plane whe
 
 Built from the product specifications in [`docs/`](docs) (PRD, APP_FLOW, TECH_STACK, FRONTEND_GUIDELINES, BACKEND_STRUCTURE, AGENT_RUNTIME).
 
-**Start here:** [Documentation hub](docs/README.md) · [Getting Started](docs/getting-started.md) · [Core Concepts](docs/concepts.md) · [Troubleshooting](docs/troubleshooting.md) · [`llms.txt`](llms.txt)
+**Bring your own keys, no markup.** Provider credentials (Anthropic, OpenAI, Ollama, any OpenAI-compatible endpoint) are AES-256-GCM encrypted in your own database and never returned by the API. Model tokens are billed directly by your provider — AI Harness never resells or marks up usage.
+
+**Private by default.** The full stack self-hosts on your own infrastructure: source code, prompts, plans, artifacts, and audit trails stay inside your servers. Only the context you explicitly approve is sent, and only to the model provider you configured.
+
+**Start here:** [Documentation hub](docs/README.md) · [Getting Started](docs/getting-started.md) · [Core Concepts](docs/concepts.md) · [Self-Hosting](docs/guides/self-hosting.md) · [Troubleshooting](docs/troubleshooting.md) · [`llms.txt`](llms.txt)
 
 ---
 

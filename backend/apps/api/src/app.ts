@@ -25,6 +25,7 @@ import registerInstructionPolicyRoutes from "./modules/instructions-policy/instr
 import registerProviderRoutes from "./modules/providers/providers.routes.js";
 import registerProviderHealthRoutes from "./modules/providers/provider-health.routes.js";
 import registerTaskRoutes from "./modules/tasks/tasks.routes.js";
+import registerSchedulesRoutes from "./modules/schedules/schedules.routes.js";
 import registerTaskExportRoutes from "./modules/tasks/tasks.export.routes.js";
 import registerPlanRoutes from "./modules/plans/plans.routes.js";
 import registerActivityRoutes from "./modules/activity/activity.routes.js";
@@ -212,6 +213,7 @@ export async function buildApp() {
   registerProviderRoutes(app);
   registerProviderHealthRoutes(app);
   registerTaskRoutes(app, events, enqueueTaskJob);
+  registerSchedulesRoutes(app, events);
   registerTaskExportRoutes(app);
   registerPlanRoutes(app, events, enqueueTaskJob);
   registerActivityRoutes(app, events, createAuditRepository(db));

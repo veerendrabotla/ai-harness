@@ -2612,14 +2612,18 @@ aiharness health
 
 Proprietary — All rights reserved.
 
-<!-- ===== README.md (130 lines) ===== -->
+<!-- ===== README.md (134 lines) ===== -->
 # AI Harness
 
 A **model-independent agentic development environment**: a PWA control plane where AI coding agents understand projects, assemble bounded context, draft structured plans, request human approval, execute policy-controlled tools, verify their work, and leave a complete auditable trail.
 
 Built from the product specifications in [`docs/`](docs) (PRD, APP_FLOW, TECH_STACK, FRONTEND_GUIDELINES, BACKEND_STRUCTURE, AGENT_RUNTIME).
 
-**Start here:** [Documentation hub](docs/README.md) · [Getting Started](docs/getting-started.md) · [Core Concepts](docs/concepts.md) · [Troubleshooting](docs/troubleshooting.md) · [`llms.txt`](llms.txt)
+**Bring your own keys, no markup.** Provider credentials (Anthropic, OpenAI, Ollama, any OpenAI-compatible endpoint) are AES-256-GCM encrypted in your own database and never returned by the API. Model tokens are billed directly by your provider — AI Harness never resells or marks up usage.
+
+**Private by default.** The full stack self-hosts on your own infrastructure: source code, prompts, plans, artifacts, and audit trails stay inside your servers. Only the context you explicitly approve is sent, and only to the model provider you configured.
+
+**Start here:** [Documentation hub](docs/README.md) · [Getting Started](docs/getting-started.md) · [Core Concepts](docs/concepts.md) · [Self-Hosting](docs/guides/self-hosting.md) · [Troubleshooting](docs/troubleshooting.md) · [`llms.txt`](llms.txt)
 
 ---
 
@@ -3638,7 +3642,7 @@ Report security vulnerabilities to: security@aiharness.dev
 - Sandbox escape
 - Secret exposure
 
-<!-- ===== TODO_NEXT_PHASE.md (554 lines) ===== -->
+<!-- ===== TODO_NEXT_PHASE.md (586 lines) ===== -->
 # AI Harness — Phased Roadmap & Execution Log
 
 > **Process rule:** this file is APPEND-ONLY and ITERATIVE. Completed phases are never deleted — they stay documented below as the execution record. New work is always appended as the next phase section with status `PLANNED → IN PROGRESS → DONE` plus verification evidence.
@@ -4193,6 +4197,38 @@ Prioritized from a full Qoder feature comparison; we remain ahead on the 16-stat
   - Earlier in the same batch (see PHASE 14-adjacent commits): usage envelope `INTERNAL_ERROR` fix + `usage-envelope.integration.test.ts` (4/4), contracts schema drift fix (builder/sessions/workspaces + `helpers.ts`), empty-optional project form (redirect + visible project), CORS allowing :3001.
   - **Full-journey E2E (fresh user, zero seeded state)**: Playwright script (signup -> workspace -> provider -> 3x routing -> project -> task -> plan approve -> tool gates -> terminal -> tabs -> usage -> models) run against `http://localhost:3001` with the rebuilt api/worker/frontend images: **ISSUES (0)**; task `9de9ad5c-dc15-4470-8218-1dcf20fd3402` -> `Completed` (~30s after plan approval, **zero replans** = coverage-gate repair holds in production), plan ready at 70s with 3 criteria bullets rendered, Activity counts `17 -> 17 -> 17 -> 29` then `29 -> 29` on two polls 6s apart (never empty = merge fix), verification row `PASSED`, Changes row `SUCCEEDED` with `hello.txt` path shown, usage page clean (`internal error: false`), models blurb absent, onboarding data-query 401s **0**; screenshots in `Temp/opencode/shots5/`, report `Temp/opencode/final-report.json`.
   - Gates: `typecheck` 0 - `lint` 0 - **full `npm test` 66 files (642 passed, 22 skipped, 0 failed) EXIT 0** (`--maxWorkers=4`; one intermediate run flaked `docker-isolation` "should enforce idle timeout" under build+stack load - 22/22 green solo and green in the final rerun; sandbox-engine untouched by this batch) - stack healthy (`/healthz` 200, frontend 200, worker with sandbox overlay + docker.sock, ollama up) - disk standing watch ~1.8 GB free (vhdx compact + cache cleanups done this session; D: has 782 GB if a Docker-data move is ever needed).
+
+### PHASE 16 execution log - competitive analysis: PolySwitch (polyswitch.io) - DONE
+
+- [x] Compared AI Harness against **PolySwitch** (`polyswitch.io`, a ~1-month-old solo-built consumer desktop "AI teammate" app) and recorded verified conclusions in **`docs/COMPETITIVE_ANALYSIS.md`** (registered in `docs/README.md` + `llms.txt`; `llms-full.txt` regenerated: **44 docs / 15,052 lines / drift gate OK**).
+  - **Verification findings**: their "official" GitHub repo (`tejasundeep/polyswitch`) 404s; artifacts live in `polyswitch-softwares` (created 2026-09-04, 0 stars, no license, one release v1.0.0); site footer claims v1.0.4; latency figures (0.12ms IPC / 800ms cloud) are unaudited marketing. Different segment (consumer desktop vs team engineering control plane) - adopt messaging, not mimicry.
+  - **Adopt (their strengths)**: headline BYOK/no-token-markup economics (already true + documented deep in MODELS_AND_PRICING.md), headline self-host/Local Bridge privacy claim, scheduled recurring tasks + completion notifications (**real feature gap** - BullMQ + hooks are the build path), curl-style one-line installer + published desktop installers (we already build win/mac/linux, publish nothing), public status/legal surfaces for GA, approval-card one-glance consequence framing.
+  - **Defend (our moats, absent in their product)**: plan acceptance criteria + verification coverage gate (verified-run cannot pass with unproven criteria), risk-tiered permission engine + sandbox isolation vs raw full-disk access, team/enterprise plane (RBAC/SSO/IP allowlist/audit/orgs/multi-replica), multi-surface control plane (Web/CLI/SDK/IDE/CI/Desktop over one API), usage metering with zero markup + cost alerts + context budgets + benchmark methodology, auditable lifecycle (state machine, checkpoints, reviewer gate, run changelog).
+  - **Roadmap actions logged (doc section 6)**: 1/2 docs headlines (quick) - 3 scheduled tasks (High) - 4 publish desktop installers (Medium) - 5 connector catalog (Medium) - 6 status/legal pages for GA (Medium) - 7 public pricing page (Medium).
+  - Gates: `docs:llms-full` drift **OK (44 docs)** - `lint` 0 - no code changes in this entry (docs-only batch).
+
+### PHASE 17 execution log - scheduled/recurring tasks (roadmap action 3) + BYOK/self-host docs headlines (actions 1/2) + approval-expiry resume gap - DONE
+
+- [x] Docs headlines (roadmap 1/2): `README.md` opens with **"Bring your own keys, no markup."** (credentials AES-256-GCM encrypted at rest, never resold or marked up) and **"Private by default."** (self-host the whole stack, Local Bridge execution; Self-Hosting linked in the start-here line); `docs/README.md` gains two chooser rows - own model keys / zero markup -> `guides/models-and-providers.md` + `MODELS_AND_PRICING.md`, keep your code private -> self-hosting + `SECURITY.md`.
+- [x] Scheduled/recurring tasks shipped end-to-end (**APP_FLOW §18**) - DB-driven sweep in the worker's existing 30s `sweepTimer` (no BullMQ repeatables), UTC structured presets, atomic claim, overlap guard, notifications inherited from the existing pipeline:
+  - **Contracts** `backend/packages/contracts/src/schedules.ts`: `SCHEDULE_CADENCES` = `EVERY_MINUTES|HOURLY|DAILY|WEEKLY` (+ Prisma enum mirror), `validateCadence` with strict per-cadence required/forbidden fields, `createScheduleRequestSchema` (`.default(true)` on enabled), `updateScheduleRequestSchema` (all-or-nothing cadence patch), `ScheduleDto`; exported from `index.ts`.
+  - **Shared** `backend/packages/shared/src/schedule-cadence.ts`: `CadenceConfig`, `parseTimeOfDay`, `computeNextRun` (strictly-after-from, UTC), `describeCadence`.
+  - **Prisma**: `TaskSchedule` model + `ScheduleCadence` enum + back-relations on User/Workspace/Project/Task; migration `20261004000000_add_task_schedules` generated via `prisma migrate diff` (byte-matches intent) and **applied to the local DB**.
+  - **API** `backend/apps/api/src/modules/schedules/schedules.routes.ts`: GET list (workspace memberships + `withCache`), POST (requireWorkspaceRole MEMBER + workspace/project existence + `computeNextRun` + audit `SCHEDULE_CREATED` + 201), PATCH (recompute only on cadence touch or re-enable), DELETE (+ audit) - registered in `app.ts`.
+  - **Worker** `backend/apps/worker/src/schedule-sweep.ts`: due query (`enabled`, `nextRunAt <= now`, take 10) -> `computeNextRun` -> **atomic claim** (conditional `updateMany` on the observed `nextRunAt`, safe vs concurrent workers) -> **overlap guard** (skip when `lastTaskId` non-terminal; claim already advanced `nextRunAt`, logged `schedule skipped: previous task still running` every cycle) -> project `AVAILABLE` guard -> `task.create` QUEUED -> `RUN_STARTED`/`SYSTEM` event -> enqueue start job (`EJOBIDEXISTS` tolerated -> orphan sweeper) -> `lastRunAt`/`lastTaskId`; wired into the sweepTimer; metric `scheduled task fired`.
+  - **Frontend** `frontend/src/app/(app)/schedules/page.tsx`: list with 5s refetch, create form (workspace -> dependent project selects, conditional cadence fields), pause/resume toggle, delete w/ confirm, cadence label helper, Empty/Error/Skeleton states; nav entry in `app-shell.tsx` SECONDARY_NAV (after Pipeline, Clock icon); `ScheduleDtoLike` in `lib/types.ts`.
+  - **Docs**: `docs/guides/schedules.md` (cadence table, firing algorithm, UI/API usage, notifications, audit, limitations/future work - timezones/cron explicitly future), `docs/README.md` Guides row, `llms.txt` entry, `APP_FLOW.md` route tree + new `# 18. SCHEDULED TASKS FLOW`, code comments cite §18; `llms-full.txt` regenerated (**45 docs / drift OK**).
+  - **Tests +47 this session**: contracts **14**, shared **18**, schedule-sweep **9**, approval-expiry **6**.
+- [x] **Found and fixed a production gap the live run exposed: approval expiry left tasks hung forever.** Expiry marked the row `EXPIRED` and published `APPROVAL_EXPIRED` but never enqueued `continue-after-tool-decision`, so the run never resumed - observed with the scheduled task stuck 45+ min in `WAITING_FOR_TOOL_APPROVAL` while docs §4c implied deny-like resume semantics.
+  - Fix: new `backend/apps/worker/src/approval-expiry.ts` `expireStaleApprovals` (conditional `PENDING` claim, toolCall `WAITING_APPROVAL -> DENIED`, publish, **enqueue continuation** with deterministic jobId, warn-only when enqueue fails) replacing the inline sweep in `worker.ts`; the API lazy branch (`approvals.routes.ts`) now enqueues before throwing `approvalExpired`; `ApprovalCoordinator.resolve`'s expiry branch also denies the toolCall (was leaving it `WAITING_APPROVAL`); `engine.ts` `approveTool`/`denyTool` swallow `APPROVAL_EXPIRED` and continue (SDK/core symmetry). jobId `continue-after-tool-decision-<taskId>-<approvalId>` makes sweeper-vs-route duplicates no-ops.
+  - Tests `approval-expiry.test.ts` **6**: due-query shape, claim+deny+publish+enqueue, no-toolCall case, enqueue-failure still expires (warn), claim-race guard, per-cycle limit.
+  - Docs: `permissions-and-approvals.md` §4c + sequence-diagram Expire branch + decision bullet now document the resume; `APP_FLOW.md` "Approval expired" flow; `troubleshooting.md` symptom entry (stale `worker.ts` refs -> `approval-expiry.ts`).
+  - **Proven live**: approval #2 expired `22:35:44.75Z` -> worker logged `approval expired` -> `continued after tool decision` 0.3s later -> fresh gate at `22:35:45Z` -> task never hangs again.
+- [x] **Live E2E against the rebuilt stack** (compose build api/worker/migrate + `up -d`; frontend unchanged): schedule `b55ad801-b74b-4105-a9ab-c5ad7b3e3415` ("Minute check", EVERY_MINUTES=1) created via UI (shot `02`) -> **fired task `493947b5-254e-4917-a42b-d192a69ec51c` at `20:40:20Z`** (`RUN_STARTED` actor `SYSTEM`, audit `SCHEDULE_CREATED`) -> plans approved x3 via UI -> tool gates approved x2 -> **COMPLETED `22:40:04Z`** (report `Temp/opencode/schedule-report.json`, **ISSUES (0)**, shots `Temp/opencode/shots-sched/01-09` incl. `08-terminal-Completed` + `09-schedules-after-run` showing the **Last run** link) -> **overlap-guard release proven**: next fire at `22:40:14Z` (+10s after terminal, task `32bab34b-...`) -> `task_completed` notification row at `22:40:04.722Z` -> test cleanup: `PATCH /v1/schedules/:id {enabled:false}` (route exercised live) + task #2 CANCELLED. During the run the sweep's overlap skips logged every 60s (claim advances +1min per cycle).
+  - E2E debugging note: the Approvals tab's accessible name is **`Approvals1`** (count badge) - `/^approvals$/i` never matched; fixed to `/^approvals/i` + `waitFor({state:"visible"})` instead of count-at-400ms polling.
+- [x] **Disk episode (recurring, cleared)**: image builds stalled at 0.67 GB -> **0.05 GB** free (WSL2 `docker_data.vhdx` 42.6 GB traps deleted-layer space; `diskpart compact` needs elevation - noted, not run). Clears: removed foreign `ghcr.io/phioranex/openclaw-docker` image (10.2 GB) + its exited container + 4 ancient hello-world containers; **moved** 11 re-downloadable installers (4.96 GB) from `Downloads` -> `D:\aiharness-archive\downloads` (moved, not deleted); %TEMP%/sandbox debris 2.6 GB. Ended at **5.05 GB free**; stack rebuilt and healthy throughout.
+- **Deferred with notes (roadmap 4-7)**: desktop installer publishing, connector catalog, status/legal pages, public pricing page - each needs product/legal decisions first; logged in `docs/COMPETITIVE_ANALYSIS.md` §6.
+- Gates: `typecheck` 0 - `lint` 0 - **full `npx vitest run --maxWorkers=4`: 70 files passed / 1 skipped, 689 tests passed / 22 skipped / 0 failed** (docker-isolation suite green this run) - `docs:llms-full` **45 docs drift OK** - live schedule E2E **ISSUES (0)** + DB evidence rows above - stack healthy (api healthy, worker ready, frontend 200, ollama up).
 
 <!-- ===== TOOL_GUIDE.md (195 lines) ===== -->
 # AI Harness — Tool Guide
@@ -5365,7 +5401,7 @@ Full reference: [SDK_GUIDE.md](../SDK_GUIDE.md) (recipe catalog, error handling,
 | `RATE_LIMITED` | 429 | Too many requests |
 | `INTERNAL_ERROR` | 500 | Server error |
 
-<!-- ===== docs/APP_FLOW.md (443 lines) ===== -->
+<!-- ===== docs/APP_FLOW.md (474 lines) ===== -->
 # AI Harness — Navigation and Logic Flow
 
 # 1. ENTRY POINTS
@@ -5702,7 +5738,7 @@ Create task -> Project health check -> Reject execution -> Show reconnect action
 Model invocation -> Provider failure -> Check configured fallback -> Use fallback or fail stage.
 
 ## Approval expired
-Pending approval -> Expiration -> Pending action invalidated -> New approval required.
+Pending approval -> Expiration -> Pending action invalidated -> Run resumes via `continue-after-tool-decision` -> Treat as denial (replan) -> New approval required.
 
 ## Data missing
 Required entity lookup -> Not found -> Return `404` -> No fallback to another workspace/entity.
@@ -5792,6 +5828,7 @@ The system must never:
 │       ├── changes
 │       ├── verification
 │       └── approvals
+├── schedules
 ├── models
 │   ├── providers
 │   └── routing
@@ -5809,6 +5846,36 @@ The system must never:
     ├── providers
     └── bridges
 ```
+
+# 18. SCHEDULED TASKS FLOW
+
+Scheduled tasks turn a goal into a recurring (or rapid-interval) agent run without a human clicking "Create task".
+
+1. User opens `/schedules` and selects **New schedule**.
+2. User picks workspace + project, enters name and goal, and chooses a cadence:
+   - `EVERY_MINUTES` — every N minutes (N ≥ 1)
+   - `HOURLY` — at minute M of every hour
+   - `DAILY` — at HH:MM every day
+   - `WEEKLY` — at HH:MM on a given weekday
+   All cadences are UTC. The API computes `nextRunAt` and stores the row in `task_schedules`.
+3. The worker's 30-second sweep finds enabled schedules with `nextRunAt <= now`.
+4. The sweep atomically claims each schedule (conditional update advancing `nextRunAt`) so
+   concurrent workers can never double-fire it.
+5. Overlap guard: if the previously fired task is still non-terminal, this cycle is skipped
+   (the advanced `nextRunAt` still prevents re-fire spam).
+6. The sweep creates a task in `QUEUED` exactly like `POST /v1/tasks` (state persisted first),
+   emits `RUN_STARTED` (actor `SYSTEM`, note `scheduled task queued`), and enqueues the
+   `start` job on the task-lifecycle queue.
+7. The task proceeds through the normal pipeline — planning, approval gates, execution,
+   verification — and completion/failure triggers the usual in-app + email notifications.
+8. `lastRunAt` / `lastTaskId` are recorded on the schedule so `/schedules` can link to the
+   most recent run.
+9. Pausing (`enabled=false`) stops future fires; re-enabling recomputes `nextRunAt` so an
+   overdue schedule never bursts. Deleting removes the row (completed tasks are untouched).
+
+Guard rails: a schedule whose project is no longer `AVAILABLE` is skipped with a warning;
+an invalid persisted cadence is logged and skipped; a failed enqueue leaves the task
+`QUEUED` for the worker's orphan sweeper to recover.
 
 <!-- ===== docs/BACKEND_STRUCTURE.md (575 lines) ===== -->
 # AI Harness — Backend Structure
@@ -9516,7 +9583,7 @@ kill ambiguity · state format/style · keep history (revise & resume, don't res
 - [examples/README.md](examples/README.md) — eight runnable recipes with sample prompts
 - [APP_FLOW.md](APP_FLOW.md) — task lifecycle state machine
 
-<!-- ===== docs/README.md (113 lines) ===== -->
+<!-- ===== docs/README.md (116 lines) ===== -->
 # AI Harness Documentation
 
 AI Harness is a model-independent agentic development environment: a control plane where AI coding agents understand projects, assemble bounded context, draft structured plans, request human approval, execute policy-controlled tools, verify their work, and leave a complete auditable trail.
@@ -9529,6 +9596,8 @@ This documentation hub links every guide, reference, and deep-dive document in t
 
 | If you want to… | Start here |
 |---|---|
+| Use your own model keys — zero token markup | [Models & Providers](guides/models-and-providers.md) · [Models & Pricing](MODELS_AND_PRICING.md) |
+| Keep source code and prompts inside your infrastructure | [Self-Hosting](guides/self-hosting.md) · [Security](../SECURITY.md) |
 | Run the web app and drive agent tasks | [Getting Started](getting-started.md) |
 | Write goals and prompts that get better results | [Prompt Guide](PROMPT_GUIDE.md) |
 | Find your situation and copy a runnable goal | [Use Cases](USE_CASES.md) |
@@ -9569,6 +9638,7 @@ This documentation hub links every guide, reference, and deep-dive document in t
 | [Context & Memory](guides/context-and-memory.md) | Budgeted context assembly, repo map, compaction, project memory |
 | [Models & Providers](guides/models-and-providers.md) | Provider credentials, model routing, fallbacks, cost tracking |
 | [Hooks & Events](guides/hooks-and-events.md) | Realtime events, replay, lifecycle hooks, metrics |
+| [Scheduled Tasks](guides/schedules.md) | Recurring UTC cadences, atomic firing, overlap guards, notifications |
 | [Repo Wiki](guides/wiki.md) | `.aiharness/wiki/` living docs, auto-maintenance, pre-approved write zone |
 | [MCP](guides/mcp.md) | Connect HTTP/SSE/STDIO Model Context Protocol servers |
 | [Self-Hosting](guides/self-hosting.md) | Single-node, production containers, GCP/Terraform, scaling |
@@ -13615,7 +13685,7 @@ Not documented here because it could not be verified in source: OAuth sign-in ti
 values (GitHub/Google OAuth routes define no explicit timeout constant), and any
 per-provider quota or `Retry-After` honored from upstream provider responses.
 
-<!-- ===== docs/guides/permissions-and-approvals.md (361 lines) ===== -->
+<!-- ===== docs/guides/permissions-and-approvals.md (364 lines) ===== -->
 # Permissions and Approvals
 
 How AI Harness decides whether a model-proposed action runs, pauses for a human, or is refused — for the operator watching a run and for the integrator wiring the control surface.
@@ -13783,7 +13853,7 @@ Scope values are `ONCE` and `TASK` ([Agent runtime architecture](../AGENT_RUNTIM
 - Decisions require an authenticated user JWT and workspace role `MEMBER` (`backend/apps/api/src/modules/approvals/approvals.routes.ts:31`). "An agent can NEVER approve its own request — decisions always carry an authenticated user id" (`approval-coordinator.ts:11-12`).
 - Rate limit: 120 requests / minute / user (`approvals.routes.ts:114`).
 - Race-safe claim: only the first decision that finds `status: "PENDING"` mutates the row; a second decision gets `409` (`approvals.routes.ts:60-77`).
-- Past `expiresAt` the approval is marked `EXPIRED`, the tool call is set to `DENIED`, `APPROVAL_EXPIRED` is published, and the call fails with an approval-expired error (`approvals.routes.ts:37-58`; sweeper also in `approval-coordinator.ts:112-118`).
+- Past `expiresAt` the approval is marked `EXPIRED`, the tool call is set to `DENIED`, `APPROVAL_EXPIRED` is published, and the run is resumed with `continue-after-tool-decision` so it replans instead of hanging in `WAITING_FOR_TOOL_APPROVAL` (`approvals.routes.ts` lazy branch; `backend/apps/worker/src/approval-expiry.ts` sweep; `engine.ts` swallows the expired error and continues). Any later decision returns an approval-expired error.
 - On decision, `TOOL_APPROVED` / `TOOL_DENIED` is published and an audit row `APPROVAL_GRANTED` / `APPROVAL_DENIED` is written (`approvals.routes.ts:79-95`).
 - The run resumes by enqueuing `continue-after-tool-decision` (`approvals.routes.ts:97-104`), which the BullMQ worker maps to `orchestrator.continueAfterToolDecision()` — the task must be in `WAITING_FOR_TOOL_APPROVAL`, transitions back to `EXECUTING`, and re-enters the execution loop (`orchestrator.ts:366-398`).
 
@@ -13853,8 +13923,11 @@ sequenceDiagram
         W->>O: continueAfterToolDecision(taskId)
         O->>O: pending denial → replanAfterFailure("Human denied …")
     else Expire (no decision within 15 min)
-        A->>A: status EXPIRED, toolCall.status = DENIED
+        W->>A: status EXPIRED, toolCall.status = DENIED (approval-expiry sweep)
         A-->>U: APPROVAL_EXPIRED { approvalId }
+        W->>W: enqueue continue-after-tool-decision
+        W->>O: continueAfterToolDecision(taskId)
+        O->>O: pending denial → replanAfterFailure("Human denied …")
     end
 ```
 
@@ -13956,7 +14029,7 @@ Tool call → `WAITING_APPROVAL`; approval row created with a 15-minute expiry; 
 
 ### 4c. Ignore
 
-After 15 minutes the approval expires, the tool call becomes `DENIED`, `APPROVAL_EXPIRED` is published, and any later decision returns an approval-expired error.
+After 15 minutes the approval expires, the tool call becomes `DENIED`, `APPROVAL_EXPIRED` is published, and any later decision returns an approval-expired error. The expiry also enqueues `continue-after-tool-decision`, so the run resumes, treats the call like a denial (replan or a fresh approval per policy), and the task never hangs in `WAITING_FOR_TOOL_APPROVAL`.
 
 ### Variant: policy denies it outright
 
@@ -13977,6 +14050,110 @@ With `requirePlanApproval: true`, the run first parks at `WAITING_FOR_APPROVAL` 
 - [Agent runtime architecture](../AGENT_RUNTIME.md) — pipeline, state machine, checkpoint and event contracts
 - [API reference](../API.md) — approval and activity endpoints, WebSocket event types
 - [Hooks and events](../guides/hooks-and-events.md) — realtime delivery, replay, lifecycle hooks, metrics
+
+<!-- ===== docs/guides/schedules.md (102 lines) ===== -->
+# Scheduled Tasks
+
+Run agent goals on a recurring cadence — nightly builds, hourly health checks, weekly reports — without anyone clicking **Create task**. A schedule stores a goal, a project, and a cadence; the worker's sweep turns each due slot into a normal task that flows through the same plan → approval → execute → verify pipeline (including in-app and email notifications on completion).
+
+**Surfaces:** `/schedules` in the web app · `POST/PATCH/DELETE /v1/schedules` in the API · fired tasks appear in **Tasks** like any other.
+
+---
+
+## Cadences (UTC)
+
+| Cadence | Required fields | Example |
+|---|---|---|
+| `EVERY_MINUTES` | `intervalMinutes` (1–10080) | Every 5 minutes |
+| `HOURLY` | `minuteOfHour` (0–59) | At :15 every hour |
+| `DAILY` | `timeOfDay` (`HH:MM`) | 06:30 every day |
+| `WEEKLY` | `timeOfDay` + `dayOfWeek` (0=Sun … 6=Sat) | Mondays 09:00 |
+
+Rules:
+
+- **All times are UTC** — identical behavior on every host, no timezone database needed. Timezone-local cadences are future work.
+- Cadences are structured presets, not cron expressions: a row can only hold the fields belonging to its cadence (the API rejects ambiguous combinations).
+- `nextRunAt` is always the first occurrence **strictly after** the moment it was computed.
+
+---
+
+## How firing works
+
+1. The worker runs a sweep every **30 seconds** looking for `enabled = true AND next_run_at <= now` (at most 10 per cycle).
+2. **Atomic claim:** `nextRunAt` is advanced with a conditional update (`WHERE id = ? AND enabled AND next_run_at = <observed>`). If another worker claimed it first, this cycle skips it — a schedule can never double-fire.
+3. **Overlap guard:** if the schedule's previous task (`lastTaskId`) is still non-terminal (`QUEUED` … `VERIFYING`), this cycle skips firing. The advanced `nextRunAt` prevents catch-up bursts.
+4. The sweep creates a task in `QUEUED` (state persisted first, mirroring `POST /v1/tasks`), emits `RUN_STARTED` with actor `SYSTEM` and note `scheduled task queued`, and enqueues the `start` job on the `task-lifecycle` queue.
+5. Planning, approvals, execution, verification, events, usage accounting, and **notifications** are identical to manually created tasks. If the enqueue fails, the task stays `QUEUED` and the existing orphan sweeper re-enqueues it.
+6. On success the schedule records `lastRunAt` and `lastTaskId`; the UI links **Last run** to the task.
+
+Guard rails: schedules whose project is no longer `AVAILABLE` are skipped with a warning; malformed persisted cadence data is logged and skipped (the API prevents creating such rows).
+
+---
+
+## Creating schedules
+
+### Web app
+
+1. Open **Schedules** in the nav → **New schedule**.
+2. Pick workspace and project, enter a name and goal, choose a cadence.
+3. **Create schedule** — the row shows cadence, next run (UTC), and the last fired task.
+4. **Pause** / **Resume** toggles firing without deleting history; **Resume** recomputes `nextRunAt` so an overdue schedule does not fire in a burst. **Delete** removes the schedule (already-created tasks are untouched).
+
+### API
+
+```http
+POST /v1/schedules
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "workspaceId": "…uuid…",
+  "projectId": "…uuid…",
+  "name": "Nightly build",
+  "goal": "Run the full test suite and fix any failures",
+  "constraints": "Do not push to main",
+  "enabled": true,
+  "cadence": "DAILY",
+  "timeOfDay": "02:00"
+}
+```
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `GET` | `/v1/schedules?workspaceId=` | List schedules across your workspace memberships |
+| `POST` | `/v1/schedules` | Create (zod-validated cadence, `nextRunAt` computed) |
+| `PATCH` | `/v1/schedules/:id` | Update name/goal/constraints/enabled or full cadence config |
+| `DELETE` | `/v1/schedules/:id` | Delete |
+
+Cadence updates are **all-or-nothing**: when any cadence field is sent, include the complete config (including `cadence`). Responses use the standard `{ data, requestId }` envelope; `POST` returns `201`.
+
+Access rules mirror tasks: creating requires workspace membership (MEMBER+), an `ACTIVE` (non-archived) workspace, and an `AVAILABLE` project; listing is scoped to workspaces you belong to.
+
+---
+
+## Notifications
+
+Scheduled tasks inherit the standard completion pipeline: an in-app **Notification** row plus email (per your notification preferences), and optional webhooks. Nothing schedule-specific to configure.
+
+---
+
+## Audit trail
+
+`SCHEDULE_CREATED`, `SCHEDULE_UPDATED`, and `SCHEDULE_DELETED` are written to the audit log (`entity_type = TASK_SCHEDULE`) with actor and workspace, alongside the per-run `RUN_STARTED` events emitted for every fired task.
+
+---
+
+## Limitations & future work
+
+- **No timezones yet** — all cadences are UTC. Local-time cadences need an IANA timezone column + DST policy.
+- **No cron expressions** — structured presets only; a cron cadence would add a parser + validation surface.
+- **No catch-up** — missed slots (worker down) advance to the next occurrence rather than replaying. The oldest pending slot fires at most once when the worker returns.
+- **No run-now trigger** — wait for the next slot (minimum cadence: every 1 minute, first fire within ~30–90 s of creation).
+- **Single fire per cycle** — overlap guard means a schedule never runs two tasks concurrently; the skipped slot is not replayed.
+
+---
+
+**See also:** [Core Concepts](../concepts.md) · [Hooks & Events](hooks-and-events.md) · [Permissions & Approvals](permissions-and-approvals.md) · [Self-Hosting](self-hosting.md)
 
 <!-- ===== docs/guides/self-hosting.md (353 lines) ===== -->
 # Self-Hosting AI Harness
@@ -14819,7 +14996,7 @@ grep -E "stuck run marked INTERRUPTED|stuck-run recovery sweep failed|worker err
 
 ### 5.4 Approvals expiring instead of being decided
 
-**Symptom →** tool calls flip to `DENIED` with an `APPROVAL_EXPIRED` event. **Cause →** the approval-expiry sweeper marks `PENDING` approvals past `expiresAt` as `EXPIRED` and flips their `WAITING_APPROVAL` tool calls to `DENIED` (`worker.ts:249-279`). **Fix →** watch for `TOOL_APPROVAL_REQUIRED` / `PLAN_APPROVAL_REQUIRED` and approve promptly via `POST /v1/approvals/:approvalId/approve`.
+**Symptom →** tool calls flip to `DENIED` with an `APPROVAL_EXPIRED` event. **Cause →** the approval-expiry sweeper (`backend/apps/worker/src/approval-expiry.ts`, every 30s) marks `PENDING` approvals past `expiresAt` as `EXPIRED`, flips their `WAITING_APPROVAL` tool calls to `DENIED`, and enqueues `continue-after-tool-decision` so the run resumes (replans) instead of hanging. **Fix →** watch for `TOOL_APPROVAL_REQUIRED` / `PLAN_APPROVAL_REQUIRED` and approve promptly via `POST /v1/approvals/:approvalId/approve` (15-minute window).
 
 ---
 

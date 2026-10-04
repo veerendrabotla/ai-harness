@@ -10,6 +10,8 @@ This documentation hub links every guide, reference, and deep-dive document in t
 
 | If you want to… | Start here |
 |---|---|
+| Use your own model keys — zero token markup | [Models & Providers](guides/models-and-providers.md) · [Models & Pricing](MODELS_AND_PRICING.md) |
+| Keep source code and prompts inside your infrastructure | [Self-Hosting](guides/self-hosting.md) · [Security](../SECURITY.md) |
 | Run the web app and drive agent tasks | [Getting Started](getting-started.md) |
 | Write goals and prompts that get better results | [Prompt Guide](PROMPT_GUIDE.md) |
 | Find your situation and copy a runnable goal | [Use Cases](USE_CASES.md) |
@@ -50,6 +52,7 @@ This documentation hub links every guide, reference, and deep-dive document in t
 | [Context & Memory](guides/context-and-memory.md) | Budgeted context assembly, repo map, compaction, project memory |
 | [Models & Providers](guides/models-and-providers.md) | Provider credentials, model routing, fallbacks, cost tracking |
 | [Hooks & Events](guides/hooks-and-events.md) | Realtime events, replay, lifecycle hooks, metrics |
+| [Scheduled Tasks](guides/schedules.md) | Recurring UTC cadences, atomic firing, overlap guards, notifications |
 | [Repo Wiki](guides/wiki.md) | `.aiharness/wiki/` living docs, auto-maintenance, pre-approved write zone |
 | [MCP](guides/mcp.md) | Connect HTTP/SSE/STDIO Model Context Protocol servers |
 | [Self-Hosting](guides/self-hosting.md) | Single-node, production containers, GCP/Terraform, scaling |

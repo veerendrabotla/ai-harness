@@ -14,5 +14,6 @@ export * from "./integrations.js";
 export * from "./sessions.js";
 export * from "./builder.js";
 export * from "./pricing.js";
+export * from "./schedules.js";
 
 export type WorkspaceRole = z.infer<typeof workspaceRoleSchema>;

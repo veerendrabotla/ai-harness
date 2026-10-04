@@ -217,7 +217,7 @@ grep -E "stuck run marked INTERRUPTED|stuck-run recovery sweep failed|worker err
 
 ### 5.4 Approvals expiring instead of being decided
 
-**Symptom →** tool calls flip to `DENIED` with an `APPROVAL_EXPIRED` event. **Cause →** the approval-expiry sweeper marks `PENDING` approvals past `expiresAt` as `EXPIRED` and flips their `WAITING_APPROVAL` tool calls to `DENIED` (`worker.ts:249-279`). **Fix →** watch for `TOOL_APPROVAL_REQUIRED` / `PLAN_APPROVAL_REQUIRED` and approve promptly via `POST /v1/approvals/:approvalId/approve`.
+**Symptom →** tool calls flip to `DENIED` with an `APPROVAL_EXPIRED` event. **Cause →** the approval-expiry sweeper (`backend/apps/worker/src/approval-expiry.ts`, every 30s) marks `PENDING` approvals past `expiresAt` as `EXPIRED`, flips their `WAITING_APPROVAL` tool calls to `DENIED`, and enqueues `continue-after-tool-decision` so the run resumes (replans) instead of hanging. **Fix →** watch for `TOOL_APPROVAL_REQUIRED` / `PLAN_APPROVAL_REQUIRED` and approve promptly via `POST /v1/approvals/:approvalId/approve` (15-minute window).
 
 ---
 

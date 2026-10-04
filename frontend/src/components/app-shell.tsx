@@ -15,6 +15,7 @@ import {
   BookOpen,
   FlaskConical,
   GitBranch,
+  Clock,
   Store,
   Building2,
 } from "lucide-react";
@@ -32,6 +33,7 @@ const SECONDARY_NAV = [
   { href: "/knowledge", label: "Knowledge", icon: BookOpen },
   { href: "/playground", label: "Playground", icon: FlaskConical },
   { href: "/pipeline", label: "Pipeline", icon: GitBranch },
+  { href: "/schedules", label: "Schedules", icon: Clock },
   { href: "/models", label: "Models", icon: Store },
   { href: "/usage", label: "Usage", icon: Coins },
   { href: "/organizations", label: "Orgs", icon: Building2 },

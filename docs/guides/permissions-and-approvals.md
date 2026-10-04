@@ -165,7 +165,7 @@ Scope values are `ONCE` and `TASK` ([Agent runtime architecture](../AGENT_RUNTIM
 - Decisions require an authenticated user JWT and workspace role `MEMBER` (`backend/apps/api/src/modules/approvals/approvals.routes.ts:31`). "An agent can NEVER approve its own request — decisions always carry an authenticated user id" (`approval-coordinator.ts:11-12`).
 - Rate limit: 120 requests / minute / user (`approvals.routes.ts:114`).
 - Race-safe claim: only the first decision that finds `status: "PENDING"` mutates the row; a second decision gets `409` (`approvals.routes.ts:60-77`).
-- Past `expiresAt` the approval is marked `EXPIRED`, the tool call is set to `DENIED`, `APPROVAL_EXPIRED` is published, and the call fails with an approval-expired error (`approvals.routes.ts:37-58`; sweeper also in `approval-coordinator.ts:112-118`).
+- Past `expiresAt` the approval is marked `EXPIRED`, the tool call is set to `DENIED`, `APPROVAL_EXPIRED` is published, and the run is resumed with `continue-after-tool-decision` so it replans instead of hanging in `WAITING_FOR_TOOL_APPROVAL` (`approvals.routes.ts` lazy branch; `backend/apps/worker/src/approval-expiry.ts` sweep; `engine.ts` swallows the expired error and continues). Any later decision returns an approval-expired error.
 - On decision, `TOOL_APPROVED` / `TOOL_DENIED` is published and an audit row `APPROVAL_GRANTED` / `APPROVAL_DENIED` is written (`approvals.routes.ts:79-95`).
 - The run resumes by enqueuing `continue-after-tool-decision` (`approvals.routes.ts:97-104`), which the BullMQ worker maps to `orchestrator.continueAfterToolDecision()` — the task must be in `WAITING_FOR_TOOL_APPROVAL`, transitions back to `EXECUTING`, and re-enters the execution loop (`orchestrator.ts:366-398`).
 
@@ -235,8 +235,11 @@ sequenceDiagram
         W->>O: continueAfterToolDecision(taskId)
         O->>O: pending denial → replanAfterFailure("Human denied …")
     else Expire (no decision within 15 min)
-        A->>A: status EXPIRED, toolCall.status = DENIED
+        W->>A: status EXPIRED, toolCall.status = DENIED (approval-expiry sweep)
         A-->>U: APPROVAL_EXPIRED { approvalId }
+        W->>W: enqueue continue-after-tool-decision
+        W->>O: continueAfterToolDecision(taskId)
+        O->>O: pending denial → replanAfterFailure("Human denied …")
     end
 ```
 
@@ -338,7 +341,7 @@ Tool call → `WAITING_APPROVAL`; approval row created with a 15-minute expiry; 
 
 ### 4c. Ignore
 
-After 15 minutes the approval expires, the tool call becomes `DENIED`, `APPROVAL_EXPIRED` is published, and any later decision returns an approval-expired error.
+After 15 minutes the approval expires, the tool call becomes `DENIED`, `APPROVAL_EXPIRED` is published, and any later decision returns an approval-expired error. The expiry also enqueues `continue-after-tool-decision`, so the run resumes, treats the call like a denial (replan or a fresh approval per policy), and the task never hangs in `WAITING_FOR_TOOL_APPROVAL`.
 
 ### Variant: policy denies it outright
 

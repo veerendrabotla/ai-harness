@@ -41,6 +41,27 @@ export interface TaskDtoLike {
   archivedAt: string | null;
 }
 
+export interface ScheduleDtoLike {
+  id: string;
+  workspaceId: string;
+  projectId: string;
+  createdBy: string;
+  name: string;
+  goal: string;
+  constraints: string | null;
+  cadence: "EVERY_MINUTES" | "HOURLY" | "DAILY" | "WEEKLY";
+  intervalMinutes: number | null;
+  minuteOfHour: number | null;
+  timeOfDay: string | null;
+  dayOfWeek: number | null;
+  enabled: boolean;
+  nextRunAt: string;
+  lastRunAt: string | null;
+  lastTaskId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface PlanStepLike {
   id: string;
   title: string;

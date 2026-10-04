@@ -54,6 +54,13 @@ export default function registerApprovalRoutes(
           actorType: "SYSTEM",
           payload: { approvalId },
         });
+        // Resume the awaiting run exactly like the worker's expiry sweep would
+        // (otherwise the task sits in WAITING_FOR_TOOL_APPROVAL forever).
+        try {
+          await enqueue({ kind: "continue-after-tool-decision", taskId: approval.taskId, approvalId: approval.id });
+        } catch (err) {
+          req.log.error({ err, approvalId }, "approval expired but continuation enqueue failed");
+        }
         throw errors.approvalExpired();
       }
 

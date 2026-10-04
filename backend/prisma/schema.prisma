@@ -37,6 +37,7 @@ model User {
   createdDeployments      Deployment[]
   approvedPlans           TaskPlan[]                    @relation("PlanApprover")
   createdTasks            Task[]                        @relation("TaskCreator")
+  createdSchedules        TaskSchedule[]                @relation("TaskScheduleCreator")
   instructionVersions     WorkspaceInstructionVersion[] @relation("InstructionAuthor")
   sentInvites             WorkspaceInvite[]
   workspaceMemberships    WorkspaceMember[]
@@ -103,6 +104,7 @@ model Workspace {
   projects             Project[]
   sessions             Session[]
   tasks                Task[]
+  taskSchedules        TaskSchedule[]
   instructionVersions  WorkspaceInstructionVersion[]
   invites              WorkspaceInvite[]
   mcpLinks             WorkspaceMcpServer[]
@@ -160,6 +162,7 @@ model Project {
   bridge               Bridge?                 @relation(fields: [bridgeId], references: [id])
   workspace            Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   tasks                Task[]
+  taskSchedules        TaskSchedule[]
   memories             ProjectMemory[]
   secrets              DeploymentSecret[]
   envVars              DeploymentEnvVar[]
@@ -297,6 +300,7 @@ model Task {
   events                       TaskEvent[]
   plans                        TaskPlan[]
   runs                         TaskRun[]
+  scheduleLinks                TaskSchedule[]            @relation("TaskScheduleLastTask")
   creator                      User                 @relation("TaskCreator", fields: [createdBy], references: [id])
   overrideProvider             ProviderConnection?  @relation("TaskModelOverride", fields: [overrideProviderConnectionId], references: [id])
   parentTask                   Task?                @relation("TaskFork", fields: [parentTaskId], references: [id])
@@ -1490,4 +1494,43 @@ model ProviderHealthCheck {
 
   @@index([providerConnectionId, checkedAt])
   @@map("provider_health_checks")
+}
+
+// ── Scheduled tasks (recurring/one-shot cron-lite, UTC presets) ────────────
+
+enum ScheduleCadence {
+  EVERY_MINUTES
+  HOURLY
+  DAILY
+  WEEKLY
+}
+
+model TaskSchedule {
+  id              String          @id @default(uuid()) @db.Uuid
+  workspaceId     String          @map("workspace_id") @db.Uuid
+  projectId       String          @map("project_id") @db.Uuid
+  createdBy       String          @map("created_by") @db.Uuid
+  name            String          @db.VarChar(160)
+  goal            String
+  constraints     String?
+  cadence         ScheduleCadence
+  intervalMinutes Int?            @map("interval_minutes")
+  minuteOfHour    Int?            @map("minute_of_hour")
+  timeOfDay       String?         @map("time_of_day") @db.VarChar(5)
+  dayOfWeek       Int?            @map("day_of_week")
+  enabled         Boolean         @default(true)
+  nextRunAt       DateTime        @map("next_run_at") @db.Timestamptz(6)
+  lastRunAt       DateTime?       @map("last_run_at") @db.Timestamptz(6)
+  lastTaskId      String?         @map("last_task_id") @db.Uuid
+  createdAt       DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  creator   User      @relation("TaskScheduleCreator", fields: [createdBy], references: [id])
+  lastTask  Task?     @relation("TaskScheduleLastTask", fields: [lastTaskId], references: [id])
+
+  @@index([enabled, nextRunAt])
+  @@index([workspaceId])
+  @@map("task_schedules")
 }

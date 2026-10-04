@@ -21,6 +21,7 @@
 - [Context & Memory](docs/guides/context-and-memory.md): Budgeted context assembly, priority tiers, repo map, compaction, prompt-injection defenses, project memory
 - [Models & Providers](docs/guides/models-and-providers.md): Encrypted provider credentials, supported adapters, stage-based model routing, fallbacks, cost and quota enforcement
 - [Hooks & Events](docs/guides/hooks-and-events.md): Persist-first ordered events, afterSequence replay, lifecycle hooks, Prometheus metrics
+- [Scheduled Tasks](docs/guides/schedules.md): Recurring UTC cadences (minutes/hourly/daily/weekly), atomic sweep firing, overlap guards, inherited notifications, audit trail
 - [Repo Wiki](docs/guides/wiki.md): `.aiharness/wiki/` living docs auto-maintained after each completed run, pre-approved write zone, seeded topic pages
 - [MCP](docs/guides/mcp.md): Connect HTTP/SSE/STDIO Model Context Protocol servers, tool discovery, health checks, security gating
 - [Self-Hosting](docs/guides/self-hosting.md): Single-node quickstart, production containers, env var reference, scaling, Terraform GCP stack

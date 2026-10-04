@@ -19,6 +19,8 @@ import { TASK_EVENT_TYPES } from "@ai-harness/domain";
 import { MCPRegistry } from "@ai-harness/mcp-platform";
 import { buildCompositeResolver } from "./sandbox.js";
 import { sweepStuckRuns } from "./stuck-run-sweep.js";
+import { sweepDueSchedules } from "./schedule-sweep.js";
+import { expireStaleApprovals } from "./approval-expiry.js";
 import { cleanStaleJobs, QUEUE_RETENTION } from "./queue-hygiene.js";
 
 // Notification service import (duplicated to avoid cross-package dependency)
@@ -305,30 +307,18 @@ async function main() {
     try {
       // ── Approval expiry sweep ──
       try {
-        const stale = await db.approvalRequest.findMany({
-          where: { status: "PENDING", expiresAt: { lt: new Date() } },
-          take: 50,
+        await expireStaleApprovals({
+          db,
+          events: runtime.events,
+          enqueue: async (job) => {
+            const jobId =
+              job.kind === "continue-after-tool-decision"
+                ? `continue-after-tool-decision-${job.taskId}-${job.approvalId}`
+                : `${job.kind}-${job.taskId}`;
+            await statsQueue.add(job.kind, job, { jobId });
+          },
+          logger,
         });
-        for (const approval of stale) {
-          await db.approvalRequest.update({
-            where: { id: approval.id },
-            data: { status: "EXPIRED" },
-          });
-          if (approval.toolCallId) {
-            await db.toolCall.updateMany({
-              where: { id: approval.toolCallId, status: "WAITING_APPROVAL" },
-              data: { status: "DENIED" },
-            });
-          }
-          await runtime.events.publishAndEmit({
-            taskId: approval.taskId,
-            runId: null,
-            eventType: "APPROVAL_EXPIRED",
-            actorType: "SYSTEM",
-            payload: { approvalId: approval.id },
-          });
-          logger.info({ approvalId: approval.id }, "approval expired");
-        }
       } catch (err) {
         logger.error({ err: redactValue(err instanceof Error ? err.message : err) }, "approval expiry sweep failed");
       }
@@ -459,6 +449,27 @@ async function main() {
         await sweepStuckRuns({ db, events: runtime.events, logger });
       } catch (err) {
         logger.error({ err: redactValue(err instanceof Error ? err.message : err) }, "stuck-run recovery sweep failed");
+      }
+
+      // ── Scheduled tasks: fire due schedules (APP_FLOW §18) ───────
+      try {
+        const fired = await sweepDueSchedules({
+          db,
+          events: runtime.events,
+          enqueue: async (job) => {
+            try {
+              await statsQueue.add(job.kind, job, { jobId: `start-${job.taskId}` });
+            } catch (err) {
+              const isConflict =
+                (err as { code?: string })?.code === "EJOBIDEXISTS" || String(err).includes("JobId");
+              if (!isConflict) throw err;
+            }
+          },
+          logger,
+        });
+        if (fired > 0) logger.info({ metric: "scheduled_tasks_fired", fired }, "scheduled tasks fired");
+      } catch (err) {
+        logger.error({ err: redactValue(err instanceof Error ? err.message : err) }, "schedule sweep failed");
       }
 
       // ── Expired backup cleanup (TTL: 7 days, runs every hour) ──

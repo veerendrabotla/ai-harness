@@ -12,3 +12,4 @@ export * from "./gateway-client.js";
 export * from "./prompt-defense.js";
 export * from "./control-bus.js";
 export * from "./secret-registry.js";
+export * from "./schedule-cadence.js";
