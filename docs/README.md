@@ -73,6 +73,7 @@ This documentation hub links every guide, reference, and deep-dive document in t
 | Document | What it covers |
 |---|---|
 | [PRD](PRD.md) | Personas, product principles, problem statement |
+| [Competitive Analysis](COMPETITIVE_ANALYSIS.md) | PolySwitch (polyswitch.io) comparison, verification notes, adopt/defend conclusions |
 | [App Flow](APP_FLOW.md) | Task lifecycle and frontend/backend flows |
 | [Tech Stack](TECH_STACK.md) | Versions and technology choices |
 | [Frontend Guidelines](FRONTEND_GUIDELINES.md) | Design tokens and UI conventions |

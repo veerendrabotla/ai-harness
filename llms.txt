@@ -10,6 +10,7 @@
 - [README](README.md): Project overview, quick links, and quickstart
 
 - [Getting Started](docs/getting-started.md): Install, run, and complete your first agent task in 30 minutes
+- [Competitive Analysis](docs/COMPETITIVE_ANALYSIS.md): PolySwitch (polyswitch.io) head-to-head comparison, claim verification, adopt/defend conclusions and roadmap actions
 - [Core Concepts](docs/concepts.md): Tasks, runs, the state machine, permissions, checkpoints, context budgets, model routing, events
 - [Troubleshooting](docs/troubleshooting.md): Symptom → cause → fix diagnostics hub (install, database, API, worker, bridge, provider issues)
 - [Examples](docs/examples/README.md): Eight worked recipes — bug fixes, plan approval, refactor with rollback, test loops, Ollama, MCP, checkpoints

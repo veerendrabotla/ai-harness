@@ -3638,7 +3638,7 @@ Report security vulnerabilities to: security@aiharness.dev
 - Sandbox escape
 - Secret exposure
 
-<!-- ===== TODO_NEXT_PHASE.md (525 lines) ===== -->
+<!-- ===== TODO_NEXT_PHASE.md (554 lines) ===== -->
 # AI Harness — Phased Roadmap & Execution Log
 
 > **Process rule:** this file is APPEND-ONLY and ITERATIVE. Completed phases are never deleted — they stay documented below as the execution record. New work is always appended as the next phase section with status `PLANNED → IN PROGRESS → DONE` plus verification evidence.
@@ -4164,6 +4164,35 @@ Prioritized from a full Qoder feature comparison; we remain ahead on the 16-stat
     - **Full-suite contention episode**: the first full rerun failed `load.test.ts` + `docker-isolation.test.ts` (16 tests) with leftover `test-*` containers and a hanging `docker system df` (daemon overloaded by the two image builds); after removing the leftovers and pruning builder cache, both files passed solo and the **full suite reran green (63 passed, 1 skipped, EXIT 0)**. vhdx does not return freed space until Docker Desktop restarts — free space now ~0.94 GB (above the ~0.5 GB flake line, but the standing watch remains).
   - **Disk episode recurred and was cleared**: pre-test free space hit **0.12 GB** (the known <0.5 GB flake zone) → first `npm test` failed 6 integration/load/docker files; cleaned npm cache + stale `%TEMP%` + `Temp\aiharness-sandbox` (1.88 GB of test debris) → **2.65 GB free** → rerun green. Standing watch unchanged: the foreign `secure-openclaw-gateway` container remains a Docker-vhdx drain (flagged, untouched).
   - Gates: `typecheck` 0 - `lint` 0 - **full `npm test` 64 files (63 passed, 1 skipped) EXIT 0** (green after cleanup; the one intermediate failure was docker-daemon contention — solo + rerun both green) - link check 44 sources / 0 broken - `docs:llms-full` 43 docs / 0 drift - `npm audit --omit=dev --audit-level=high` exit 0 - **live `e2e:agent` round 5: COMPLETED + wiki maintained**.
+
+### PHASE 14 execution log (task 23) - spec-driven flow: plan acceptance criteria + verification coverage gate - DONE
+
+- [x] 23 spec-driven - PHASE 14 backlog #2 (Qoder parity): plan steps carry acceptance criteria and the verification engine asserts them — the planner now states what "done" means per step, and a run cannot settle as verified while any criterion is unproven, with zero behaviour change for plans that predate the flow.
+  - **Contracts** (`backend/packages/contracts/src/plans.ts`): `planStepSchema` gains `acceptanceCriteria` (1-6 items, ≤400 chars each, `.default([])`) and the verification entry becomes `verificationPlanEntrySchema { command, asserts[].default([]) }` (new exported `VerificationPlanEntry`); `TaskPlanDto` typed accordingly. Zod-strip mode means model-emitted extras are still dropped and legacy-shaped inputs parse to the defaults — old rows and old model outputs are valid by construction.
+  - **Planner prompt** (`planner.ts`): JSON shape now includes `"acceptanceCriteria": string[]` per step and `"asserts": string[]` per verification command, plus the rules — 1-3 objectively checkable claims per step (specific file/behavior/output, never vague), asserts must quote the exact criterion text the command proves, every criterion asserted by ≥1 command, "unasserted criteria fail verification and force a replan".
+  - **Coverage assertion** (`verification-engine.ts`): new static `uncoveredCriteria({ steps, verificationPlan, results })` — criteria are matched (trim / whitespace-collapse / case-fold) against `asserts` of **PASSED** commands only; returns `[]` for legacy steps (no criteria), plans without a declared `verificationPlan` (auto-inferred command sets assert nothing by design), and empty inputs. `verify()` itself is untouched — persistence, events, browser branch, ERROR mapping all behave as before.
+  - **Orchestrator gate** (`orchestrator.ts:817-849`): coverage computed right after `verify()`, `uncoveredCriteria` added to the `afterVerification` hook payload (:830 — subscribers now get `{ results, uncoveredCriteria }`), and coverage failures join command failures in one failure summary at :834-849 (`Verification failed: … | Acceptance criteria not asserted by any passing verification command: …`) feeding the existing failure-driven replan path — same `MAX_REPLANS_EXCEEDED` semantics, one combined reason.
+  - **Legacy-row hydration** (`hydratePlanDraft`, `orchestrator.ts:2316+`): persisted rows predating the flow are filled with schema defaults at read time (`executionLoop` plan build + `latestPlanAny`) — this also resolved the 5 typecheck errors the new required-after-default inferred types surfaced (`pendingStep` construction gained an explicit `acceptanceCriteria: []`).
+  - **Execution surfaces**: the implementation model now receives a `Step acceptance criteria:` block in `proposeNextAction`'s objective when the step declares criteria; observability traces use the criteria text as the step's `expectedOutcome` instead of `Step N completed` (falls back when absent).
+  - **API / SDK / portability**: `serializePlan` normalizes steps + verification entries on the wire so the contract is complete regardless of row age; **swagger `planResponseSchema` rewritten to the real plan shape** (it documented a stale `{order, action, description}` step schema that never matched the code — found and fixed); **markdown export bug fixed** (`tasks.routes.ts` rendered `step.description`, always undefined — now title + detail + nested criteria checkboxes); session-export types, SDK `PlanStep`/`Plan`, and frontend `PlanStepLike`/`PlanLike` extended; both plan UIs render criteria checklists (task-detail plan card + agent approval card).
+  - **Tests +26, all new seams covered**: `verification-engine.test.ts` **17** (first-ever engine tests: verify status mapping PASSED/FAILED/ERROR + browser-without-engine SKIPPED + empty-commands note + `VERIFICATION_COMPLETED` payloads; `uncoveredCriteria` 7 cases incl. failed-command asserts not counting, normalization, dedupe/empty-string, legacy skips; `inferVerificationCommands` 4 incl. priority order and `hasTests` gate) · `spec-driven.test.ts` **4** (executionLoop end-to-end: covered→`COMPLETED`, uncovered→replan summary carries the criterion text, failed+uncovered joined by ` | `, legacy plan→no gate) · `planner.test.ts` **+3** (prompt instructs criteria/asserts, criteria round-trip through parse, defaults when omitted) · `contracts.test.ts` **+3** (defaults, valid shape, empty/oversized rejection). One test-side bug caught in bring-up: the dedupe case initially passed an empty `verificationPlan` which hits the intentional early-return — fixed to declare a command.
+  - **Docs**: `AGENT_RUNTIME.md` §2 Verification Engine (coverage semantics) + §5 Step 4 (plan field list now specifies per-step criteria and per-command `asserts`); `concepts.md` §10 verification bullet; `hooks-and-events.md` `afterVerification` payload updated to `{ results, uncoveredCriteria }` with corrected line refs; `PROMPT_GUIDE.md` verification-recipe *Why* note. `llms-full.txt` regenerated (43 docs / 14,928 lines).
+  - **Environmental contention episode (full-suite)**: repeated full runs failed 1-6 files — always docker-isolation timeouts plus API-integration/load timeouts, never the same twice; every suspect passed solo (acceptance 4/4, multiplayer 5/5, sso 11/11, webcontainer 7/7, load 5/5, docker-isolation 22/22 twice). Mitigations: removed a leftover `test-write-prevention-*` container from the aborted run, pruned builder cache, and **stopped the foreign `secure-openclaw-gateway`** (crash-looping since before task 22, where it was "flagged, untouched" — it is the first stopped now because its restart churn contends with docker-isolation's daemon calls). Definitive full-suite green with `npx vitest run --maxWorkers=4` (identical assertions, lower parallel burst): **66 files, 65 passed, 1 skipped, 0 failed**.
+  - Gates: `typecheck` 0 - `lint` 0 - **full `npm test` 66 files (65 passed, 1 skipped, 0 failed) EXIT 0** (`--maxWorkers=4` for local docker-daemon contention; CI runs plain `npm test`) - link check 44 sources / 0 broken - `docs:llms-full` 43 docs / 0 drift - `npm audit --omit=dev --audit-level=high` exit 0 - live `e2e:agent`: [see below].
+
+### PHASE 15 execution log - hardening pass: coverage-gate false positives, activity merge, onboarding 401 race, task-page polling gap, full-journey Playwright E2E - DONE
+
+- [x] Find-them-all/fix-them-all hardening batch (the web UI + spec-driven gate), all proven by one clean full-journey Playwright run (**0 issues**) against the rebuilt stack.
+  - **Coverage-gate false-positive repair** (`backend/packages/agent-runtime/src/planner.ts`): new exported `linkCriteriaToAsserts(plan)` links paraphrased verification `asserts` back to their source acceptance criteria before the orchestrator's `uncoveredCriteria` gate runs - tokenized match (`[^a-z0-9.+-]+` split, `.-`-edge trim, `LINK_STOPWORDS` dropped, len<2 non-numeric dropped) with threshold `matched >= 2 || matched*2 >= critTokens.length`, numeric-exact tiebreak, max 6 asserts per criterion, idempotent, criteria with no sufficiently-close assert stay uncovered (strict semantics preserved for genuine gaps: legacy `asserts: []` plans and README.md-vs-readme token mismatch still replan). Wired in `createPlan` (returns the linked plan) and `orchestrator.ts` (`const linkedPlan = linkCriteriaToAsserts(plan)` before the gate). +6 tests in `planner.test.ts` (end-to-end paraphrase repair + `describe("linkCriteriaToAsserts")` block); `spec-driven.test.ts` 4/4 and `verification-engine.test.ts` 17/17 still green - the matcher itself is untouched.
+  - **Auth refresh identity** (`backend/apps/api/src/modules/auth/auth.routes.ts`): `/v1/auth/refresh` now returns the user alongside `accessToken`/`refreshToken` (the route was dropping `user` while `auth.refresh` already returned it) - `hydrate()` no longer lands authenticated-with-no-identity; the user chip survives full reloads.
+  - **Onboarding 401 race** (`frontend/src/components/app-providers.tsx`): `bindTokenGetter`/`bindTokenApplier` moved out of the `useEffect` to module scope - child effects run before the parent effect, so onboarding's `providers`/`workspaces` queries fired on first mount before any token getter was bound and went out with no `Authorization` header (401 -> silent re-auth -> retry). E2E now measures **0 data-query 401s** during signup->onboarding.
+  - **Activity tab oscillation** (`frontend/src/app/(app)/tasks/[taskId]/page.tsx` `eventsQuery`): the `afterSequence` delta REPLACED the cached list, so a poll with no new rows emptied the tab back to "No activity yet". Now merges delta into cache (dedupe by id, sort by `sequenceNumber`, return delta when cache is empty).
+  - **Task-page polling gap (the blocker the E2E caught)**: `plansQuery`/`verificationQuery`/`contextQuery` had no `refetchInterval` and no realtime invalidation (the "socket invalidates queries" comment was stale) - a plan published after the page mounted stayed invisible forever ("No plan yet") and the **Approve & run button never appeared** even though the API was `WAITING_FOR_APPROVAL`; same for verification/context results. Added a shared `activePoll()` (4s while task not terminal) on plans/verification/context, fixed the comment, and the E2E then approved at 70s without a reload.
+  - **Changes tab was a hardcoded EmptyState** (same file): now backed by the real `GET /v1/tasks/:id/changes` (the endpoint the agent page already used) - per-card tool name, file path, status, input summary; added to `invalidateAll`.
+  - **Models marketplace copy** (`frontend/src/app/(app)/models/page.tsx`): every model card showed the provider-level blurb (`PROVIDER_INFO`, e.g. "GPT-4o, GPT-4 Turbo, o1, and more" under GPT-3.5 Turbo, raw `mistral` under Codestral) - replaced with the factual model id; map deleted.
+  - Earlier in the same batch (see PHASE 14-adjacent commits): usage envelope `INTERNAL_ERROR` fix + `usage-envelope.integration.test.ts` (4/4), contracts schema drift fix (builder/sessions/workspaces + `helpers.ts`), empty-optional project form (redirect + visible project), CORS allowing :3001.
+  - **Full-journey E2E (fresh user, zero seeded state)**: Playwright script (signup -> workspace -> provider -> 3x routing -> project -> task -> plan approve -> tool gates -> terminal -> tabs -> usage -> models) run against `http://localhost:3001` with the rebuilt api/worker/frontend images: **ISSUES (0)**; task `9de9ad5c-dc15-4470-8218-1dcf20fd3402` -> `Completed` (~30s after plan approval, **zero replans** = coverage-gate repair holds in production), plan ready at 70s with 3 criteria bullets rendered, Activity counts `17 -> 17 -> 17 -> 29` then `29 -> 29` on two polls 6s apart (never empty = merge fix), verification row `PASSED`, Changes row `SUCCEEDED` with `hello.txt` path shown, usage page clean (`internal error: false`), models blurb absent, onboarding data-query 401s **0**; screenshots in `Temp/opencode/shots5/`, report `Temp/opencode/final-report.json`.
+  - Gates: `typecheck` 0 - `lint` 0 - **full `npm test` 66 files (642 passed, 22 skipped, 0 failed) EXIT 0** (`--maxWorkers=4`; one intermediate run flaked `docker-isolation` "should enforce idle timeout" under build+stack load - 22/22 green solo and green in the final rerun; sandbox-engine untouched by this batch) - stack healthy (`/healthz` 200, frontend 200, worker with sandbox overlay + docker.sock, ollama up) - disk standing watch ~1.8 GB free (vhdx compact + cache cleanups done this session; D: has 782 GB if a Docker-data move is ever needed).
 
 <!-- ===== TOOL_GUIDE.md (195 lines) ===== -->
 # AI Harness — Tool Guide
@@ -6724,6 +6753,100 @@ Related: [Load report](../backend/load-tests/multi-instance-report.md) ·
 [Models and Pricing](MODELS_AND_PRICING.md) ·
 [Self-Hosting](guides/self-hosting.md) ·
 [Documentation benchmark](DOCUMENTATION_BENCHMARK.md)
+
+<!-- ===== docs/COMPETITIVE_ANALYSIS.md (92 lines) ===== -->
+# Competitive Analysis — PolySwitch (polyswitch.io)
+
+> Status: analysis complete — conclusions folded into the roadmap (see [Roadmap](../TODO_NEXT_PHASE.md)).
+> Sources verified 2026-10-04: `polyswitch.io` (home, about, `llms.txt`), GitHub via API.
+> This document is independent analysis of a third-party product; all claims about PolySwitch are attributed and dated. No PolySwitch content is reproduced beyond factual summaries.
+
+---
+
+## 1. What PolySwitch is
+
+A solo-built, **consumer desktop app** (Windows `.exe` + Linux `.deb` today, macOS pending) that presents personal "AI teammate" bots — named personas you chat with — which can research, edit files, run a headless browser, connect to external apps, and execute scheduled background routines.
+
+| Attribute | Claimed (their site, 2026-10-04) |
+|---|---|
+| Form factor | Native desktop runtime, system-tray style, "zero cloud custody" |
+| Audience | Individuals, freelancers, small business ("busy creators and teams") |
+| Models | BYOK: Claude, GPT-4o/Codex, Grok, offline LM Studio models |
+| Connectors | "500+ apps" via MCP + Composio (Slack, Gmail, Notion, …) |
+| Safety | 1-click approval cards before destructive actions |
+| Automation | Scheduled routines (cron-like background jobs) + completion notifications |
+| Pricing | Free forever (local models only) · Pro **$1.99/mo** billed $19.99/yr for first 100 users, 14-day refund, zero token markup |
+| Distribution | GitHub releases, `curl \| bash` installer, marketing site with `llms.txt`/`llms-full.txt` AEO pair |
+
+## 2. Verification notes (honesty checks)
+
+- **Broken flagship link**: the footer's "Official GitHub Repository" (`github.com/tejasundeep/polyswitch`) does not resolve (404 via API). The actual artifacts live in **`tejasundeep/polyswitch-softwares`** — created **2026-09-04**, **0 stars**, **no license**, single release **v1.0.0 (2026-09-10)**, last push 2026-09-10.
+- **Version mismatch**: site footer says `BUILD: v1.0.4 #429A` while releases only ever shipped `v1.0.0`.
+- **Latency numbers are marketing**: "0.12ms IPC", "800ms+ cloud agents" are unaudited figures; treat as copy, not benchmarks.
+- **Launch-timing claims**: "first 100 users", testimonials, and "save 58%" are typical launch mechanics — unverifiable.
+- Product age: **~1 month**. Early, thin (one release), unlicensed.
+
+**Verdict on their claims:** real enough to learn from, not yet mature enough to benchmark against. Their AEO play (`llms.txt` + `llms-full.txt`) is legitimate and mirrors our own approach.
+
+## 3. Head-to-head
+
+| Dimension | PolySwitch | AI Harness |
+|---|---|---|
+| Target user | Consumer / freelancer / solo founder | Development teams & platform/enterprise buyers |
+| Form factor | Desktop app only | Web PWA + CLI + SDK + IDE extension + CI + Desktop (build scripts shipped) |
+| Run isolation | Executes **directly on your desktop** with full disk access | **Docker sandbox or Local Bridge** with path confinement, capability drops, resource limits |
+| Safety model | Binary 1-click approve before dangerous ops | **Tiered permission engine**: ALLOW / ASK / DENY policies, risk levels (READ/WRITE/DESTRUCTIVE/EXTERNAL), env guards, wiki write zones, security scan gate, scoped approvals |
+| Planning | Not marketed | **Plan steps with acceptance criteria** + per-command `asserts` |
+| Verification | Not marketed | **Coverage gate**: a run cannot settle as *verified* while any criterion is unproven (forces replan) |
+| Team features | None (single-user desktop) | Workspaces, RBAC, invites/members, SSO/SAML, IP allowlist, audit trail, orgs |
+| Observability | "History of completed jobs" | Usage metering (**no markup** — documented), cost alerts, event stream + replay, context budgets, benchmarks |
+| Scheduling | **Scheduled routines** (headline feature) | ❌ No first-class recurring tasks (only internal cost-alert sweeps) — **gap** |
+| Connectors | MCP + Composio ("500+") | MCP (HTTP/SSE/STDIO) + bridge discovery; no app-connector marketplace — **gap** |
+| Notifications | "Notifies when job finished" | Email + in-app prefs + outbound webhooks (no "routine finished" framing) |
+| Privacy story | **Headline**: zero cloud custody, BYOK wholesale | Documented (**no markup**, BYOK in `MODELS_AND_PRICING.md`) but **not surfaced as a headline** — gap in messaging |
+| Self-hosting | N/A (it is your machine) | Docker Compose, GCP/Terraform, multi-replica, air-gap capable |
+| Docs/AEO | `llms.txt` + `llms-full.txt` (5 pages of docs) | `llms.txt` + `llms-full.txt` with **drift gate**, 40+ docs, link-checked |
+| Pricing transparency | Detailed tiers + refund on marketing site | Model price matrix + plan quotas in docs; **no public product pricing page** — gap |
+| Maturity | 1 release, 0 stars, no license, broken repo link | 642 tests, CI 7/7, multi-phase E2E battery, released changelog |
+
+## 4. What they do better — adopt these
+
+1. **Lead with the economics.** "Pay providers wholesale, 0% token markup" is their strongest line. We already *behave* that way (metering records table price as-is; BYOK documented) — surface it in the README headline and docs hub, not just deep in `MODELS_AND_PRICING.md`.
+2. **Lead with the privacy story.** "Zero cloud custody" resonates. Our equivalents — self-hosted deploy, LOCAL_BRIDGE mode, air-gap — are real and stronger (we add isolation *on top*). Make "your code never leaves your infrastructure" a headline claim.
+3. **Scheduled routines.** First-class recurring tasks ("run this goal every morning") + completion notifications is a genuine feature gap for us. We have the queue infrastructure (BullMQ) and hooks to build on.
+4. **Trust & legal surface.** Terms, privacy policy, security contact, status page. We have `SECURITY.md` in-repo; a public status/trust page is a GA prerequisite.
+5. **One-line installer polish.** `curl -fsSL … | bash` + per-OS installers. We already build desktop targets (`desktop:build:win/mac/linux`) but publish nothing — packaging/publishing is the missing half.
+6. **Approval-card framing.** Their copy ("you remain the conductor", clear consequence preview) matches our approvals UI; keep our richer scope/input summaries but ensure the *why* reads in one glance.
+
+## 5. What we do better — defend & amplify these
+
+1. **Verified completion, not vibes.** Plan acceptance criteria + verification coverage gate (PHASE 14/15) is something they don't attempt — a run literally cannot claim success while a criterion is unproven.
+2. **Isolation, not raw access.** They run with full disk privileges; we run tools in a confined sandbox with risk-tiered policy. For any buyer past hobbyist, that difference is decisive — say it plainly.
+3. **Team & enterprise plane.** RBAC, invites, SSO/SAML, IP allowlist, audit, orgs, multi-replica — absent on their roadmap as a single-user app.
+4. **Multi-surface control plane.** Web, CLI, SDK, IDE, CI, Desktop over one API — they are a desktop client with no API/CI story.
+5. **Cost & context observability.** Usage metering, cost alerts, context budgets, event replay, published benchmarks — their only number is an unaudited "0.12ms".
+6. **Auditable lifecycle.** State machine, checkpoints/rollback, reviewer gate, wiki changelog of runs — "what did the agent do, and can we prove it" is our core thesis.
+
+## 6. Conclusions
+
+- **Different segments.** PolySwitch is a *consumer desktop companion*; AI Harness is a *team engineering control plane*. We should **not** chase their persona bots or consumer pricing — we should **absorb their messaging discipline** (economics, privacy, control) and **close two real feature gaps** (scheduling, connector breadth).
+- **Convergence points** already on our side: BYOK/no-markup, approvals, MCP, local execution (Local Bridge), llms.txt AEO (we're deeper).
+- **Their verification gaps are a warning to us too**: publish honest version/status info, keep legal/trust surfaces current, and never put unaudited latency numbers in marketing (our `BENCHMARKS.md` methodology bar stays).
+- **No code changes fall out of this analysis directly**; the actionable items are roadmap entries:
+
+| # | Action | Type | Priority |
+|---|---|---|---|
+| 1 | Headline BYOK + "no token markup" in README/docs hub | Docs | High (quick) |
+| 2 | Headline self-host + Local Bridge privacy claim | Docs | High (quick) |
+| 3 | Scheduled/recurring tasks + completion notifications | Feature | High |
+| 4 | Publish desktop installers (win/mac/linux already build) | Release | Medium |
+| 5 | App-connector story (composio-style catalog or curated MCP list) | Feature | Medium |
+| 6 | Public status page + terms/privacy/security contact for GA | Ops | Medium |
+| 7 | Public product pricing page (beyond model price matrix) | Docs/Marketing | Medium |
+
+---
+
+*Revisit after any PolySwitch release beyond v1.0.0 or when we ship scheduling — whichever lands first.*
 
 <!-- ===== docs/DOCUMENTATION_BENCHMARK.md (245 lines) ===== -->
 # AI Harness — Documentation Benchmark & Gap Analysis
@@ -9393,7 +9516,7 @@ kill ambiguity · state format/style · keep history (revise & resume, don't res
 - [examples/README.md](examples/README.md) — eight runnable recipes with sample prompts
 - [APP_FLOW.md](APP_FLOW.md) — task lifecycle state machine
 
-<!-- ===== docs/README.md (112 lines) ===== -->
+<!-- ===== docs/README.md (113 lines) ===== -->
 # AI Harness Documentation
 
 AI Harness is a model-independent agentic development environment: a control plane where AI coding agents understand projects, assemble bounded context, draft structured plans, request human approval, execute policy-controlled tools, verify their work, and leave a complete auditable trail.
@@ -9469,6 +9592,7 @@ This documentation hub links every guide, reference, and deep-dive document in t
 | Document | What it covers |
 |---|---|
 | [PRD](PRD.md) | Personas, product principles, problem statement |
+| [Competitive Analysis](COMPETITIVE_ANALYSIS.md) | PolySwitch (polyswitch.io) comparison, verification notes, adopt/defend conclusions |
 | [App Flow](APP_FLOW.md) | Task lifecycle and frontend/backend flows |
 | [Tech Stack](TECH_STACK.md) | Versions and technology choices |
 | [Frontend Guidelines](FRONTEND_GUIDELINES.md) | Design tokens and UI conventions |
