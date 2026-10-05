@@ -70,10 +70,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Pulls with the workflow token so the boot test works even while the
+      # packages are still set to private (public visibility is a package
+      # setting on the repo owner's account).
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Run public install script
         run: |
           chmod +x install.sh
-          AI_H_INSTALL_DIR="$RUNNER_TEMP/ai-harness" ./install.sh
+          # file:// base: raw.githubusercontent CDN can lag a commit at push
+          # time; the checkout is the exact same commit users will fetch.
+          AI_H_BASE_URL="file://$GITHUB_WORKSPACE" AI_H_INSTALL_DIR="$RUNNER_TEMP/ai-harness" ./install.sh
 
       - name: Verify stack endpoints
         run: |
