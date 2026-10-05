@@ -49,7 +49,38 @@ fi
 mkdir -p "$DIR"
 cd "$DIR"
 export COMPOSE_FILE=docker-compose.release.yml
-echo "==> Installing to $DIR (web=$WEB api=$API)"
+
+# Container-name prefix: coexist with any other AI Harness stack on this
+# machine (e.g. a from-source dev stack reuses the same container names) by
+# shifting the suffix, mirroring the port shift above. Re-runs of this install
+# reuse the prefix persisted in .env, so this stays idempotent.
+stack_foreign() {
+  local p="$1" c proj
+  for c in postgres redis migrate api worker gateway frontend; do
+    if docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qx "$p-$c"; then
+      proj="$(docker inspect --format '{{index .Config.Labels "com.docker.compose.project"}}' "$p-$c" 2>/dev/null || true)"
+      [ "$proj" = "$p" ] || return 0
+    fi
+  done
+  return 1
+}
+PFX="${AI_H_PREFIX:-}"
+if [ -z "$PFX" ] && [ -f .env ]; then
+  PFX="$(sed -n 's/^AI_H_PREFIX=//p' .env | head -n 1)"
+fi
+[ -n "$PFX" ] || PFX="ai-harness"
+n=1
+while [ "$n" -le 50 ] && stack_foreign "$PFX"; do
+  n=$((n + 1))
+  PFX="$(printf '%s' "$PFX" | sed -E 's/-[0-9]+$//')-$n"
+done
+export AI_H_PREFIX="$PFX"
+export COMPOSE_PROJECT_NAME="$PFX"
+if [ "$PFX" != "ai-harness" ]; then
+  echo "==> Container prefix shifted to '$PFX' (another AI Harness stack owns the default names)"
+fi
+
+echo "==> Installing to $DIR (web=$WEB api=$API prefix=$PFX)"
 
 curl -fsSL "$BASE/docker-compose.release.yml" -o docker-compose.release.yml \
   || die "could not download docker-compose.release.yml"
@@ -89,6 +120,8 @@ done < .env.example
   echo "AI_H_PORT_PG=$PG"
   echo "AI_H_PORT_REDIS=$REDIS"
   echo "AI_H_PORT_GW=$GW"
+  echo "AI_H_PREFIX=$PFX"
+  echo "COMPOSE_PROJECT_NAME=$PFX"
 } >> .env
 echo "==> .env created with fresh secrets"
 
@@ -111,8 +144,8 @@ for i in $(seq 1 60); do
       echo "AI Harness is up and running."
       echo "  Web app:  http://localhost:$WEB"
       echo "  API docs: http://localhost:$API/docs"
-      echo "  Stop:     docker compose -f $DIR/docker-compose.release.yml down"
-      echo "  Update:   docker compose -f $DIR/docker-compose.release.yml pull && docker compose -f $DIR/docker-compose.release.yml up -d"
+      echo "  Stop:     docker compose -p $PFX --env-file $DIR/.env -f $DIR/docker-compose.release.yml down"
+      echo "  Update:   docker compose -p $PFX --env-file $DIR/.env -f $DIR/docker-compose.release.yml pull && docker compose -p $PFX --env-file $DIR/.env -f $DIR/docker-compose.release.yml up -d"
       exit 0
     fi
     echo "    API healthy, frontend not ready yet (got $web_code)..."

@@ -43,6 +43,41 @@ if (-not $env:AI_H_PORT_WEB) {
   }
 }
 
+# Container-name prefix: coexist with any other AI Harness stack on this
+# machine (e.g. a from-source dev stack reuses the same container names) by
+# shifting the suffix, mirroring the port shift above. Re-runs of this install
+# reuse the prefix persisted in .env, so this stays idempotent.
+function Test-StackForeign([string]$pfx) {
+  $names = @(docker ps -a --format "{{.Names}}" 2>$null)
+  foreach ($c in @("postgres","redis","migrate","api","worker","gateway","frontend")) {
+    if ($names -contains "$pfx-$c") {
+      $proj = ""
+      try { $proj = ((docker inspect "$pfx-$c" 2>$null | ConvertFrom-Json) | ForEach-Object { $_.Config.Labels.'com.docker.compose.project' }) } catch { }
+      if ($proj -ne $pfx) { return $true }
+    }
+  }
+  return $false
+}
+$pfx = $env:AI_H_PREFIX
+if (-not $pfx) {
+  $envPath = Join-Path $Dir ".env"
+  if (Test-Path $envPath) {
+    $m = Select-String -Path $envPath -Pattern '^AI_H_PREFIX=(.+)$' | Select-Object -First 1
+    if ($m) { $pfx = $m.Matches[0].Groups[1].Value }
+  }
+}
+if (-not $pfx) { $pfx = "ai-harness" }
+$n = 1
+while ($n -le 50 -and (Test-StackForeign $pfx)) {
+  $n++
+  $pfx = ($pfx -replace '-\d+$', '') + "-" + $n
+}
+$env:AI_H_PREFIX = $pfx
+$env:COMPOSE_PROJECT_NAME = $pfx
+if ($pfx -ne "ai-harness") {
+  Write-Host "==> Container prefix shifted to '$pfx' (another AI Harness stack owns the default names)"
+}
+
 New-Item -ItemType Directory -Force -Path $Dir | Out-Null
 Write-Host "==> Installing to $Dir (web=$web api=$api)"
 
@@ -82,6 +117,8 @@ $out.Add("AI_H_PORT_API=$api")
 $out.Add("AI_H_PORT_PG=$pg")
 $out.Add("AI_H_PORT_REDIS=$redis")
 $out.Add("AI_H_PORT_GW=$gw")
+$out.Add("AI_H_PREFIX=$pfx")
+$out.Add("COMPOSE_PROJECT_NAME=$pfx")
 [IO.File]::WriteAllLines((Join-Path $Dir ".env"), $out, $utf8NoBom)
 Write-Host "==> .env created with fresh secrets"
 
@@ -128,8 +165,8 @@ try {
   Write-Host "AI Harness is up and running."
   Write-Host "  Web app:  http://localhost:$web"
   Write-Host "  API docs: http://localhost:$api/docs"
-  Write-Host "  Stop:     docker compose -f `"$Dir\docker-compose.release.yml`" down"
-  Write-Host "  Update:   docker compose -f `"$Dir\docker-compose.release.yml`" pull && docker compose up -d"
+  Write-Host "  Stop:     docker compose -p $pfx --env-file `"$Dir\.env`" -f `"$Dir\docker-compose.release.yml`" down"
+  Write-Host "  Update:   docker compose -p $pfx --env-file `"$Dir\.env`" -f `"$Dir\docker-compose.release.yml`" pull && docker compose -p $pfx --env-file `"$Dir\.env`" -f `"$Dir\docker-compose.release.yml`" up -d"
 
   if ($env:AI_H_NO_BROWSER -ne "1" -and -not $env:CI) {
     Start-Process "http://localhost:$web"

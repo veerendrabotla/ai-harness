@@ -45,7 +45,7 @@ Both scripts:
 - install to `~/.ai-harness` (`%USERPROFILE%\.ai-harness` on Windows);
 - pull prebuilt images from `ghcr.io` (Postgres + Redis + API + worker + gateway + frontend);
 - generate a `.env` with fresh JWT/CSRF/encryption/bridge secrets;
-- auto-shift ports by +100 if the defaults (3000/4000/5432/6379/4010) are busy;
+- auto-shift ports by +100 if the defaults (3000/4000/5432/6379/4010) are busy, and shift the container-name prefix if another AI Harness stack (e.g. a from-source dev install) already owns the default names — two stacks coexist on one machine;
 - wait for health, then print the URL — open `http://localhost:3000` and sign up.
 
 ```text
