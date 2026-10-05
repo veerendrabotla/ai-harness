@@ -12,7 +12,7 @@ if (!gotTheLock) {
 } else {
 
 const isDev = !app.isPackaged;
-const FRONTEND_URL = isDev ? "http://localhost:3000" : "app://./index.html";
+const FRONTEND_URL = process.env.AI_HARNESS_FRONTEND_URL ?? "http://localhost:3000";
 
 function getIconPath(): string {
   return path.join(__dirname, "..", "assets", "icon.png");

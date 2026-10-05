@@ -11,8 +11,9 @@ directories:
 files:
   - dist/**/*
   - assets/**/*
-  - "!node_modules/**/*"
   - package.json
+  - "!src/**/*"
+  - "!tsconfig.json"
 
 extraMetadata:
   main: dist/main.js
@@ -84,7 +85,11 @@ appImage:
 deb:
   artifactName: "${productName}-${version}-linux-${arch}.${ext}"
 
-# Publishing/update feed is intentionally not configured: this repo has no
-# git remote yet. Add a `publish:` block (github provider) once a real
-# repository URL exists — in-app auto-update requires it.
+# Update feed for electron-updater: assets are uploaded to the GitHub release
+# (latest.yml + blockmap + installer). Builds run with --publish never; upload
+# is a separate `gh release upload` step.
+publish:
+  provider: github
+  owner: veerendrabotla
+  repo: ai-harness
 
