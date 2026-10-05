@@ -53,3 +53,4 @@ backend/node_modules/.prisma/
 .terraform.tfstate.lock.info
 *.tfvars
 *.tfvars.json
+*.vsix
