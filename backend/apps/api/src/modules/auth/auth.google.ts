@@ -9,8 +9,8 @@ function cookieOptions() {
   const env = getEnv();
   return {
     httpOnly: true,
-    sameSite: "lax" as const,
-    secure: env.NODE_ENV === "production",
+    sameSite: env.COOKIE_SAMESITE,
+    secure: env.NODE_ENV === "production" || env.COOKIE_SAMESITE === "none",
     path: "/v1/auth",
     maxAge: REFRESH_COOKIE_MAX_AGE_SECONDS,
   };

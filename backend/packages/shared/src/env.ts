@@ -38,6 +38,11 @@ const EnvSchema = z.object({
     .min(32, "JWT_ACCESS_SECRET must be at least 32 characters"),
   JWT_ISSUER: z.string().min(1).default("ai-harness"),
   ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(900),
+  // Auth cookies SameSite mode: "lax" (default, same-site deploys) or "none"
+  // when the frontend runs on a different site than the API (e.g. Vercel
+  // frontend + remote API) so cookies ride cross-site fetches. "none" forces
+  // Secure, which browsers only accept over https or localhost.
+  COOKIE_SAMESITE: z.enum(["lax", "strict", "none"]).default("lax"),
   REFRESH_SESSION_TTL_DAYS: z.coerce.number().int().positive().default(30),
   PASSWORD_RESET_TTL_MINUTES: z.coerce.number().positive().default(30),
 

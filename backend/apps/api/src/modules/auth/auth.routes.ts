@@ -18,10 +18,21 @@ function cookieOptions() {
   const env = getEnv();
   return {
     httpOnly: true,
-    sameSite: "lax" as const,
-    secure: env.NODE_ENV === "production",
+    sameSite: env.COOKIE_SAMESITE,
+    secure: env.NODE_ENV === "production" || env.COOKIE_SAMESITE === "none",
     path: "/v1/auth",
     maxAge: REFRESH_COOKIE_MAX_AGE_SECONDS,
+  };
+}
+
+function sessionCookieOptions() {
+  const env = getEnv();
+  return {
+    httpOnly: true,
+    sameSite: env.COOKIE_SAMESITE,
+    secure: env.NODE_ENV === "production" || env.COOKIE_SAMESITE === "none",
+    path: "/",
+    maxAge: env.ACCESS_TOKEN_TTL_SECONDS,
   };
 }
 
@@ -51,13 +62,7 @@ export default function registerAuthRoutes(app: FastifyInstance) {
         const input = signupRequestSchema.parse(req.body);
         const { user, accessToken, refreshToken } = await auth.signup(input);
         reply.setCookie(REFRESH_COOKIE, refreshToken, cookieOptions());
-        reply.setCookie("session", accessToken, {
-          httpOnly: true,
-          sameSite: "lax" as const,
-          secure: getEnv().NODE_ENV === "production",
-          path: "/",
-          maxAge: getEnv().ACCESS_TOKEN_TTL_SECONDS,
-        });
+        reply.setCookie("session", accessToken, sessionCookieOptions());
         return ok(reply, { user: toPublicUser(user), accessToken, refreshToken }, 201);
       } catch (err) {
         if (err instanceof AppError) throw err;
@@ -91,13 +96,7 @@ export default function registerAuthRoutes(app: FastifyInstance) {
         const input = loginRequestSchema.parse(req.body);
         const { user, accessToken, refreshToken } = await auth.login(input);
         reply.setCookie(REFRESH_COOKIE, refreshToken, cookieOptions());
-        reply.setCookie("session", accessToken, {
-          httpOnly: true,
-          sameSite: "lax" as const,
-          secure: getEnv().NODE_ENV === "production",
-          path: "/",
-          maxAge: getEnv().ACCESS_TOKEN_TTL_SECONDS,
-        });
+        reply.setCookie("session", accessToken, sessionCookieOptions());
         return ok(reply, { user: toPublicUser(user), accessToken, refreshToken });
       } catch (err) {
         if (err instanceof AppError) throw err;
@@ -121,13 +120,7 @@ export default function registerAuthRoutes(app: FastifyInstance) {
       }
       const { accessToken, refreshToken, user } = await auth.refresh(raw);
       reply.setCookie(REFRESH_COOKIE, refreshToken, cookieOptions());
-      reply.setCookie("session", accessToken, {
-        httpOnly: true,
-        sameSite: "lax" as const,
-        secure: getEnv().NODE_ENV === "production",
-        path: "/",
-        maxAge: getEnv().ACCESS_TOKEN_TTL_SECONDS,
-      });
+      reply.setCookie("session", accessToken, sessionCookieOptions());
       return ok(reply, { user: toPublicUser(user), accessToken, refreshToken });
     } catch (err) {
       if (err instanceof AppError) throw err;

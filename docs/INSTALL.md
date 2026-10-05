@@ -75,8 +75,25 @@ Multi-terminal dev mode, tests, and the first-task walkthrough: [Getting Started
 
 ## 6. Hosting it for a team
 
-- **Frontend on Vercel:** import the repo, set root directory `frontend`, set `NEXT_PUBLIC_API_URL` to your API origin, and allow the Vercel origin in the API's `FRONTEND_ORIGIN`.
-- **Backend anywhere Docker runs:** the same one-line installers on a server, or the production compose/Terraform paths in [Self-Hosting](guides/self-hosting.md).
+### Frontend on Vercel (live URL, ~10 min)
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/veerendrabotla/ai-harness&env=NEXT_PUBLIC_API_URL)
+
+1. Import this repo at [vercel.com/new](https://vercel.com/new) (the button does it) → set **Root Directory = `frontend`** (Settings → General — required, this is an npm-workspaces monorepo). Build & Output stay auto-detected (`next build`).
+2. Project env vars (Settings → Environment Variables):
+   - `NEXT_PUBLIC_API_URL` — your API origin, e.g. `https://api.example.com`. Required **before** the first build; it is baked into the bundle.
+   - optional `NEXT_PUBLIC_POSTHOG_KEY` / `NEXT_PUBLIC_POSTHOG_HOST`.
+3. Deploy, then copy the production domain (`https://<project>.vercel.app`).
+4. Point the API at it (API host `.env` → restart api):
+   - `FRONTEND_ORIGIN=https://<project>.vercel.app` — CORS, CSRF allowlist and socket origins (comma-separated for several).
+   - `COOKIE_SAMESITE=none` — app and API are different sites, so auth cookies must be `SameSite=None; Secure`; browsers accept that only over `https://` or `localhost`.
+5. Done — every push to `main` redeploys automatically (Vercel Git integration).
+
+Split-origin auth is handled in code: the frontend mirrors the session cookie onto its own origin, so middleware-protected routes work across domains. With a **local** API (`http://localhost:4000`) the hosted page works only on your machine — for a team, host the backend too:
+
+### Backend anywhere Docker runs
+
+The same one-line installers on a server, or the production compose/Terraform paths in [Self-Hosting](guides/self-hosting.md).
 
 ## Status of package managers
 

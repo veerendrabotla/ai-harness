@@ -108,6 +108,12 @@ npm run db:generate      # generates prisma client (REQUIRED before first start)
 npm run db:migrate       # applies prisma migrations
 ```
 
+### Option C — hosted frontend (Vercel)
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/veerendrabotla/ai-harness&env=NEXT_PUBLIC_API_URL)
+
+Import the repo, set **Root Directory = `frontend`**, set env `NEXT_PUBLIC_API_URL` to your API origin, then add the Vercel domain to the API's `FRONTEND_ORIGIN` and set `COOKIE_SAMESITE=none` (cross-site cookies). Pushes to `main` redeploy automatically. Full runbook: [docs/INSTALL.md](docs/INSTALL.md#6-hosting-it-for-a-team).
+
 ## Running locally (3 terminals)
 
 Skip this section if you used Docker above.

@@ -1,6 +1,14 @@
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
+  resolve: {
+    // Mirror the frontend tsconfig "@/*" path alias so frontend source files
+    // (e.g. use-task-socket.ts) resolve when imported from tests.
+    alias: {
+      "@": fileURLToPath(new URL("./frontend/src", import.meta.url)),
+    },
+  },
   test: {
     include: [
       "backend/packages/*/src/**/*.test.ts",

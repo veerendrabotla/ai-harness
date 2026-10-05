@@ -68,9 +68,15 @@ Pipeline: builds/pushes api+worker+gateway images → terraform apply (SQL, Redi
 
 ## 6. Frontend hosting (Vercel, ≈10 min)
 
-Import the repo on Vercel → framework Next.js → root dir `frontend`.
-Env: `NEXT_PUBLIC_API_URL=https://<api-run-url>`.
-Deploy. Add the Vercel domain to API env `FRONTEND_ORIGIN` (redeploy api) — edit in `infra/terraform/cloudrun.tf` common_env or via Cloud Run console.
+1. vercel.com → Add New → Project → import this repo. **Root Directory = `frontend`** (Settings → General — required, npm-workspaces monorepo). Build & Output auto-detect `next build`.
+2. Env (Settings → Environment Variables): `NEXT_PUBLIC_API_URL=https://<api-run-url>` (required at build), optional `NEXT_PUBLIC_POSTHOG_KEY` / `NEXT_PUBLIC_POSTHOG_HOST`.
+3. Deploy → copy the production domain (`https://<project>.vercel.app`).
+4. API side: add to `common_env` in `infra/terraform/cloudrun.tf` (or the Cloud Run console), then re-apply / redeploy the api service:
+   - `FRONTEND_ORIGIN=https://<project>.vercel.app` — comma-separated list; feeds CORS, the CSRF allowlist and socket CORS.
+   - `COOKIE_SAMESITE=none` — split-origin cookies need `SameSite=None; Secure`; Cloud Run serves https ✓.
+5. Pushes to `main` now deploy the frontend automatically (Vercel Git integration).
+
+Split-origin session auth is handled in code (the frontend mirrors the session cookie onto its own origin). If the API URL ever changes, update `NEXT_PUBLIC_API_URL` and trigger a Vercel redeploy — it is baked at build time.
 
 ## 7. Post-deploy verification (≈5 min)
 

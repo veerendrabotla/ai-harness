@@ -27,8 +27,9 @@ let client: QueryClient | undefined;
 bindTokenGetter(() => useAuthStore.getState().accessToken);
 bindTokenApplier((token) => {
   if (!token) return;
-  // Refresh responses only carry a token; user stays as-is.
-  useAuthStore.setState({ accessToken: token });
+  // Refresh responses only carry a token; user stays as-is. setAccessToken
+  // also rewrites the middleware session cookie so its exp stays current.
+  useAuthStore.getState().setAccessToken(token);
   // Reconnect the socket with the fresh token
   reconnectSocketWithToken();
 });

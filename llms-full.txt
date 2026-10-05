@@ -2083,7 +2083,7 @@ Removed — that flow never existed in code. See
 - [SDK Guide](SDK_GUIDE.md) — webhooks and API escape hatches
 - [Architecture](ARCHITECTURE.md) — where registries live in the system tree
 
-<!-- ===== EXTERNAL_DEPLOYMENT_CHECKLIST.md (93 lines) ===== -->
+<!-- ===== EXTERNAL_DEPLOYMENT_CHECKLIST.md (99 lines) ===== -->
 # EXTERNAL DEPLOYMENT CHECKLIST
 
 Everything below requires **your** accounts/credentials. All code, configs and scripts are already prepared — follow top to bottom. Estimated manual time: ~45–60 min.
@@ -2154,9 +2154,15 @@ Pipeline: builds/pushes api+worker+gateway images → terraform apply (SQL, Redi
 
 ## 6. Frontend hosting (Vercel, ≈10 min)
 
-Import the repo on Vercel → framework Next.js → root dir `frontend`.
-Env: `NEXT_PUBLIC_API_URL=https://<api-run-url>`.
-Deploy. Add the Vercel domain to API env `FRONTEND_ORIGIN` (redeploy api) — edit in `infra/terraform/cloudrun.tf` common_env or via Cloud Run console.
+1. vercel.com → Add New → Project → import this repo. **Root Directory = `frontend`** (Settings → General — required, npm-workspaces monorepo). Build & Output auto-detect `next build`.
+2. Env (Settings → Environment Variables): `NEXT_PUBLIC_API_URL=https://<api-run-url>` (required at build), optional `NEXT_PUBLIC_POSTHOG_KEY` / `NEXT_PUBLIC_POSTHOG_HOST`.
+3. Deploy → copy the production domain (`https://<project>.vercel.app`).
+4. API side: add to `common_env` in `infra/terraform/cloudrun.tf` (or the Cloud Run console), then re-apply / redeploy the api service:
+   - `FRONTEND_ORIGIN=https://<project>.vercel.app` — comma-separated list; feeds CORS, the CSRF allowlist and socket CORS.
+   - `COOKIE_SAMESITE=none` — split-origin cookies need `SameSite=None; Secure`; Cloud Run serves https ✓.
+5. Pushes to `main` now deploy the frontend automatically (Vercel Git integration).
+
+Split-origin session auth is handled in code (the frontend mirrors the session cookie onto its own origin). If the API URL ever changes, update `NEXT_PUBLIC_API_URL` and trigger a Vercel redeploy — it is baked at build time.
 
 ## 7. Post-deploy verification (≈5 min)
 
@@ -2612,7 +2618,7 @@ aiharness health
 
 Proprietary — All rights reserved.
 
-<!-- ===== README.md (144 lines) ===== -->
+<!-- ===== README.md (150 lines) ===== -->
 # AI Harness
 
 A **model-independent agentic development environment**: a PWA control plane where AI coding agents understand projects, assemble bounded context, draft structured plans, request human approval, execute policy-controlled tools, verify their work, and leave a complete auditable trail.
@@ -2722,6 +2728,12 @@ npm run infra:up         # starts postgres 17.4 + redis 7.4 containers
 npm run db:generate      # generates prisma client (REQUIRED before first start)
 npm run db:migrate       # applies prisma migrations
 ```
+
+### Option C — hosted frontend (Vercel)
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/veerendrabotla/ai-harness&env=NEXT_PUBLIC_API_URL)
+
+Import the repo, set **Root Directory = `frontend`**, set env `NEXT_PUBLIC_API_URL` to your API origin, then add the Vercel domain to the API's `FRONTEND_ORIGIN` and set `COOKIE_SAMESITE=none` (cross-site cookies). Pushes to `main` redeploy automatically. Full runbook: [docs/INSTALL.md](docs/INSTALL.md#6-hosting-it-for-a-team).
 
 ## Running locally (3 terminals)
 
@@ -3652,7 +3664,7 @@ Report security vulnerabilities to: security@aiharness.dev
 - Sandbox escape
 - Secret exposure
 
-<!-- ===== TODO_NEXT_PHASE.md (604 lines) ===== -->
+<!-- ===== TODO_NEXT_PHASE.md (616 lines) ===== -->
 # AI Harness — Phased Roadmap & Execution Log
 
 > **Process rule:** this file is APPEND-ONLY and ITERATIVE. Completed phases are never deleted — they stay documented below as the execution record. New work is always appended as the next phase section with status `PLANNED → IN PROGRESS → DONE` plus verification evidence.
@@ -4257,6 +4269,18 @@ Prioritized from a full Qoder feature comparison; we remain ahead on the 16-stat
 - **Needs the owner (cannot be done by CI)**: VS Code Marketplace publisher account for `vsce publish`; winget/Homebrew/Chocolatey publisher manifests; Apple/Windows code-signing certificates. Statuses documented in `docs/INSTALL.md` §Status of package managers.
 - **Deferred**: Vercel/Railway "Deploy" button (needs the accounts), hosted SaaS demo (needs infra budget).
 - Gates: `typecheck` 0 - `lint` 0 - full `npx vitest run --maxWorkers=4`: **71 files / 695 passed / 22 skipped / 0 failed** (incl. 6 new `detectPlatform` tests; run during the install E2E flaked on load/dockertiming tests - clean rerun) - `npm -w frontend run build` 0 - `docs:llms-full` **46 docs drift OK** - `gen-docker-manifests --check` OK - workflow YAML parse OK - stranger E2E: `install.sh` full boot PASS (port+prefix shift) + `install.ps1` config-only PASS + 13/13 anonymous URL checks **HTTP 200** - NSIS install/run/uninstall PASS - CI **green** - publish-images incl. quickstart **green**.
+
+### PHASE 19 execution log - Vercel frontend hosting: split-origin readiness - CODE DONE (owner account step remains)
+
+- [x] **Audit found the real blockers for hosting the frontend on Vercel with the API elsewhere** (auth would break in four ways, not the build): (1) `middleware.ts` requires a `session` cookie on the APP origin, but the API sets it host-only on the API origin, so on `*.vercel.app` every protected route would 307 to `/login` forever; (2) refresh/session cookies were `SameSite=Lax`, which browsers do NOT send on cross-site POST fetches -> silent refresh would die after `ACCESS_TOKEN_TTL_SECONDS`; (3) CORS/CSRF/socket origins all key off `FRONTEND_ORIGIN` (already configurable, but undocumented for split-origin); (4) `NEXT_PUBLIC_API_URL` is baked at build on Vercel (`public/env.js` runtime override is Docker-only).
+- [x] **Fix 1 - app-origin session cookie**: `frontend/src/lib/auth-store.ts` now mirrors the access token into a first-party `session` cookie (`buildSessionCookie` derives Max-Age from the JWT `exp`, adds `Secure` on https, `SameSite=Lax`, DOM-guarded for SSR) on `setSession`/`setAccessToken`/`hydrate`, clears it on `clearSession`/failed hydrate. New store action `setAccessToken` wired through `app-providers.tsx` `bindTokenApplier`, so the silent-refresh path keeps the cookie's exp current. Same-host deploys unaffected (the mirror overwrites the API's cookie in place - cookies are host-, not port-scoped).
+- [x] **Fix 2 - `COOKIE_SAMESITE` env** (`backend/packages/shared/src/env.ts`, enum `lax|strict|none`, default `lax`): applied to refresh + session cookies in `auth.routes.ts` (refactored into `sessionCookieOptions()`) and the OAuth refresh cookies in `auth.github.ts`/`auth.google.ts`. `none` forces `Secure` (browsers accept it over https or localhost only - documented). Same-site deploys keep `lax`: zero behavior change.
+- [x] **Fix 3 - CSRF/CORS**: verified `app.ts` feeds `frontendOrigins(env)` into both `cors({credentials:true})` and `registerCsrfOrigins`, so adding the Vercel domain to `FRONTEND_ORIGIN` covers CORS + the CSRF double-submit bypass + socket CORS in one variable. No code change needed.
+- [x] **Vitest alias gap found by the new test**: `use-task-socket.ts:5` imports `@/lib/auth-store` and the root `vitest.config.ts` had no `@` alias -> root-cause fix (alias `@ -> frontend/src`), not a test workaround.
+- [x] **Tests +5** (`frontend/src/lib/auth-store.test.ts`): exp-derived Max-Age, Secure flag, 60s floor for expired tokens, non-JWT fallback TTL, and node/SSR safety of all store actions.
+- [x] **Docs**: `EXTERNAL_DEPLOYMENT_CHECKLIST.md` section 6 (step-by-step: root dir `frontend`, env vars, `FRONTEND_ORIGIN` + `COOKIE_SAMESITE=none` on the API, Git-integration autos), `docs/INSTALL.md` section 6 (full Vercel runbook + Deploy button + split-origin note), README new **Option C - hosted frontend (Vercel)** with the Deploy button, `.env.example` (`COOKIE_SAMESITE`, split-origin `FRONTEND_ORIGIN` comment), `frontend/.env.example` (baked-at-build warning). Deliberately **no custom deploy workflow**: Vercel's Git integration redeploys on push once the owner connects the repo (`.vercel` already gitignored).
+- **Needs the owner (cannot be done by CI)**: create the Vercel account/project (Root Directory `frontend`, `NEXT_PUBLIC_API_URL`, optional PostHog keys), then set `FRONTEND_ORIGIN=<vercel-domain>` + `COOKIE_SAMESITE=none` on the API and restart it. With a local API the hosted page works only on the owner's machine; team use needs the backend hosted too (one-liners on a server).
+- Gates: `typecheck` 0 - `lint` 0 - full `npx vitest run --maxWorkers=4`: **73 files / 700 passed / 22 skipped / 0 failed** (first run overloaded the machine - load/docker-timing + both integration suites flaked at their 15s hook timeouts; isolation rerun of the 3 files green, then clean full run green) - `npm -w frontend run build` 0 - `docs:llms-full` **46 docs drift OK** (15372 lines) - `gen-docker-manifests --check` OK.
 
 <!-- ===== TOOL_GUIDE.md (195 lines) ===== -->
 # AI Harness — Tool Guide
@@ -7939,7 +7963,7 @@ The PWA must show:
 - Do not create separate visual systems for each AI provider.
 - Do not use inconsistent button wording for the same action.
 
-<!-- ===== docs/INSTALL.md (83 lines) ===== -->
+<!-- ===== docs/INSTALL.md (100 lines) ===== -->
 # Install AI Harness
 
 Every way to get AI Harness running — desktop app, one-line web-stack installer, VS Code extension, or build from source. Nothing here requires cloning the repository unless you want to develop.
@@ -8017,8 +8041,25 @@ Multi-terminal dev mode, tests, and the first-task walkthrough: [Getting Started
 
 ## 6. Hosting it for a team
 
-- **Frontend on Vercel:** import the repo, set root directory `frontend`, set `NEXT_PUBLIC_API_URL` to your API origin, and allow the Vercel origin in the API's `FRONTEND_ORIGIN`.
-- **Backend anywhere Docker runs:** the same one-line installers on a server, or the production compose/Terraform paths in [Self-Hosting](guides/self-hosting.md).
+### Frontend on Vercel (live URL, ~10 min)
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/veerendrabotla/ai-harness&env=NEXT_PUBLIC_API_URL)
+
+1. Import this repo at [vercel.com/new](https://vercel.com/new) (the button does it) → set **Root Directory = `frontend`** (Settings → General — required, this is an npm-workspaces monorepo). Build & Output stay auto-detected (`next build`).
+2. Project env vars (Settings → Environment Variables):
+   - `NEXT_PUBLIC_API_URL` — your API origin, e.g. `https://api.example.com`. Required **before** the first build; it is baked into the bundle.
+   - optional `NEXT_PUBLIC_POSTHOG_KEY` / `NEXT_PUBLIC_POSTHOG_HOST`.
+3. Deploy, then copy the production domain (`https://<project>.vercel.app`).
+4. Point the API at it (API host `.env` → restart api):
+   - `FRONTEND_ORIGIN=https://<project>.vercel.app` — CORS, CSRF allowlist and socket origins (comma-separated for several).
+   - `COOKIE_SAMESITE=none` — app and API are different sites, so auth cookies must be `SameSite=None; Secure`; browsers accept that only over `https://` or `localhost`.
+5. Done — every push to `main` redeploys automatically (Vercel Git integration).
+
+Split-origin auth is handled in code: the frontend mirrors the session cookie onto its own origin, so middleware-protected routes work across domains. With a **local** API (`http://localhost:4000`) the hosted page works only on your machine — for a team, host the backend too:
+
+### Backend anywhere Docker runs
+
+The same one-line installers on a server, or the production compose/Terraform paths in [Self-Hosting](guides/self-hosting.md).
 
 ## Status of package managers
 
