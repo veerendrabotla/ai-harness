@@ -4,6 +4,7 @@ const PUBLIC_ROUTES = [
   "/",
   "/login",
   "/signup",
+  "/download",
   "/forgot-password",
   "/reset-password",
   "/icons/icon-192.png",

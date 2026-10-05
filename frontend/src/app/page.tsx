@@ -14,6 +14,7 @@ import {
   Zap,
   Globe,
   Database,
+  Download,
 } from "lucide-react";
 
 export default function LandingPage() {
@@ -49,6 +50,12 @@ export default function LandingPage() {
                 className="inline-flex h-12 items-center rounded-xl border border-border-strong px-8 font-medium text-text-primary hover:bg-surface-2 transition-colors"
               >
                 Sign In
+              </Link>
+              <Link
+                href="/download"
+                className="inline-flex h-12 items-center gap-2 rounded-xl border border-border-strong px-8 font-medium text-text-primary hover:bg-surface-2 transition-colors"
+              >
+                <Download className="h-4 w-4" /> Download
               </Link>
             </div>
           </div>
@@ -328,7 +335,7 @@ export default function LandingPage() {
               Get Started Free <ArrowRight className="h-4 w-4" />
             </Link>
             <a
-              href="https://github.com"
+              href="https://github.com/veerendrabotla/ai-harness"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex h-12 items-center gap-2 rounded-xl border border-border-strong px-8 font-medium text-text-primary hover:bg-surface-2 transition-colors"
@@ -347,10 +354,11 @@ export default function LandingPage() {
             <p className="text-sm text-text-muted">AI-native software development platform</p>
           </div>
           <div className="flex gap-6 text-sm text-text-secondary">
+            <Link href="/download" className="hover:text-text-primary">Download</Link>
             <Link href="/login" className="hover:text-text-primary">Sign In</Link>
             <Link href="/signup" className="hover:text-text-primary">Sign Up</Link>
-            <a href="https://docs.aiharness.dev" className="hover:text-text-primary">Docs</a>
-            <a href="https://github.com" className="hover:text-text-primary">GitHub</a>
+            <a href="https://github.com/veerendrabotla/ai-harness/tree/main/docs" className="hover:text-text-primary">Docs</a>
+            <a href="https://github.com/veerendrabotla/ai-harness" className="hover:text-text-primary">GitHub</a>
           </div>
         </div>
       </footer>

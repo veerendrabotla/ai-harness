@@ -18,6 +18,7 @@ import {
   Clock,
   Store,
   Building2,
+  Download,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/lib/auth-store";
@@ -37,6 +38,7 @@ const SECONDARY_NAV = [
   { href: "/models", label: "Models", icon: Store },
   { href: "/usage", label: "Usage", icon: Coins },
   { href: "/organizations", label: "Orgs", icon: Building2 },
+  { href: "/download", label: "Download", icon: Download },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 

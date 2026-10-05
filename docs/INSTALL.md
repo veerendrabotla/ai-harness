@@ -2,6 +2,8 @@
 
 Every way to get AI Harness running — desktop app, one-line web-stack installer, VS Code extension, or build from source. Nothing here requires cloning the repository unless you want to develop.
 
+Already running the web app? The same installers are served at **`/download`** (landing page → Download, or sidebar → Download when signed in).
+
 Related: [Getting Started](getting-started.md) (first task walkthrough) · [Self-Hosting](guides/self-hosting.md) (production topology) · [Troubleshooting](troubleshooting.md)
 
 ---
