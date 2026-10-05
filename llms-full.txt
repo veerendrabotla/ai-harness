@@ -3652,7 +3652,7 @@ Report security vulnerabilities to: security@aiharness.dev
 - Sandbox escape
 - Secret exposure
 
-<!-- ===== TODO_NEXT_PHASE.md (600 lines) ===== -->
+<!-- ===== TODO_NEXT_PHASE.md (601 lines) ===== -->
 # AI Harness — Phased Roadmap & Execution Log
 
 > **Process rule:** this file is APPEND-ONLY and ITERATIVE. Completed phases are never deleted — they stay documented below as the execution record. New work is always appended as the next phase section with status `PLANNED → IN PROGRESS → DONE` plus verification evidence.
@@ -4250,7 +4250,8 @@ Prioritized from a full Qoder feature comparison; we remain ahead on the 16-stat
 - [x] **`release.yml` automated multi-platform releases**: tag `v*` -> version-check (desktop + extension must match tag) -> matrix build (windows/macos/ubuntu installers + `.vsix`) -> `SHA256SUMS.txt` -> GitHub release with Download table + generated notes; `workflow_dispatch` = build-only validation. Exercised by tag `v0.1.1`.
 - [x] **Findable place**: `docs/INSTALL.md` (all surfaces + checksums + hosting), README hero **Download / install** table, docs-hub row, `llms.txt` entry -> `llms-full` regenerated (**46 docs, drift OK**).
 - [x] **Two more bugs caught by the CI boot test**: raw.githubusercontent CDN 404 race at push time (CI now uses `file://$GITHUB_WORKSPACE` base) and `docker compose pull` missing the compose file (fixed with `COMPOSE_FILE`); GHCR pulls authenticated via `docker/login-action` with the workflow token.
-- **Needs the owner (cannot be done by CI)**: GHCR package visibility -> Public (4 packages, GitHub UI or `gh auth refresh -s read:packages` + API PATCH); VS Code Marketplace publisher account for `vsce publish`; winget/Homebrew/Chocolatey publisher manifests; Apple/Windows code-signing certificates. Statuses documented in `docs/INSTALL.md` §Status of package managers.
+- [x] **GHCR packages Public (stranger pull proven)**: all 4 containers (`ai-harness-{api,worker,gateway,frontend}`) flipped to `visibility=public` in the GitHub UI after proving the REST API has **no** visibility/update endpoint (PATCH `/user/packages/container/{name}` 404s on every api-version; docs list only get/list/delete/restore - device-flow scopes were a dead end). Verified credential-free: `visibility=public` x4 + unauthenticated `GET https://ghcr.io/v2/veerendrabotla/<img>/manifests/latest` with a freshly issued anonymous token -> **HTTP 200 x4**, so anyone can run the one-liners with no GitHub login.
+- **Needs the owner (cannot be done by CI)**: VS Code Marketplace publisher account for `vsce publish`; winget/Homebrew/Chocolatey publisher manifests; Apple/Windows code-signing certificates. Statuses documented in `docs/INSTALL.md` §Status of package managers.
 - **Deferred**: Vercel/Railway "Deploy" button (needs the accounts), hosted SaaS demo (needs infra budget).
 - Gates: `typecheck` 0 - `lint` 0 - full `npx vitest run --maxWorkers=4`: **70 files / 689 passed / 22 skipped / 0 failed** (one load flake on run 1, clean rerun 2) - `docs:llms-full` **46 docs drift OK** - `gen-docker-manifests --check` OK - workflow YAML parse OK - `install.sh` + `install.ps1` config-mode PASS - NSIS install/run/uninstall PASS - CI **green** - publish-images incl. quickstart **green**.
 
