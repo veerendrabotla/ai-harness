@@ -4,7 +4,10 @@
   "private": true,
   "description": "AI Harness — Desktop application",
   "main": "dist/main.js",
-  "author": "Veerendra Botla",
+  "author": {
+    "name": "Veerendra Botla",
+    "email": "veerendrabotla@users.noreply.github.com"
+  },
   "homepage": "https://github.com/veerendrabotla/ai-harness",
   "license": "UNLICENSED",
   "scripts": {
