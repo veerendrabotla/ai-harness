@@ -48,6 +48,7 @@ fi
 
 mkdir -p "$DIR"
 cd "$DIR"
+export COMPOSE_FILE=docker-compose.release.yml
 echo "==> Installing to $DIR (web=$WEB api=$API)"
 
 curl -fsSL "$BASE/docker-compose.release.yml" -o docker-compose.release.yml \
@@ -92,7 +93,7 @@ done < .env.example
 echo "==> .env created with fresh secrets"
 
 if [ -n "$CONFIG_ONLY" ]; then
-  docker compose -f docker-compose.release.yml config -q || die "compose validation failed"
+  docker compose config -q || die "compose validation failed"
   echo "==> Config-only mode: compose file validated, not booting."
   exit 0
 fi

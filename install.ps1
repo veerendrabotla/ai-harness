@@ -87,7 +87,8 @@ Write-Host "==> .env created with fresh secrets"
 
 Push-Location $Dir
 try {
-  docker compose -f docker-compose.release.yml config -q
+  $env:COMPOSE_FILE = "docker-compose.release.yml"
+  docker compose config -q
   if ($LASTEXITCODE -ne 0) { Fail "compose validation failed" }
 
   if ($env:AI_H_CONFIG_ONLY -eq "1") {
