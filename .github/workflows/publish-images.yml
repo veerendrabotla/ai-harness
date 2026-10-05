@@ -1,0 +1,91 @@
+# Publishes production container images to GitHub Container Registry so that
+# anyone can run AI Harness with `docker compose` (see docker-compose.release.yml
+# and install.sh / install.ps1) without cloning the repository.
+name: publish-images
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  image:
+    name: Push ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: api
+            dockerfile: Dockerfile.api
+          - service: worker
+            dockerfile: Dockerfile.worker
+          - service: gateway
+            dockerfile: Dockerfile.gateway
+          - service: frontend
+            dockerfile: Dockerfile.frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/ai-harness-${{ matrix.service }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+            type=sha
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # Boots the exact public quickstart path (install.sh pulling the images this
+  # workflow just pushed) so a broken release compose/script can never reach
+  # a user's machine.
+  quickstart:
+    name: Quickstart boot test (install.sh)
+    needs: [image]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run public install script
+        run: |
+          chmod +x install.sh
+          AI_H_INSTALL_DIR="$RUNNER_TEMP/ai-harness" ./install.sh
+
+      - name: Verify stack endpoints
+        run: |
+          set -euo pipefail
+          curl -fsS http://localhost:4000/healthz | tee /tmp/healthz.json
+          grep -q '"status":"ok"' /tmp/healthz.json
+          code="$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000)"
+          echo "frontend=$code"
+          [ "$code" = "200" ]
+
+      - name: Teardown
+        if: always()
+        run: |
+          cd "$RUNNER_TEMP/ai-harness" 2>/dev/null || exit 0
+          docker compose -f docker-compose.release.yml down -v 2>/dev/null || true

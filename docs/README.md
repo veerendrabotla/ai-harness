@@ -10,6 +10,7 @@ This documentation hub links every guide, reference, and deep-dive document in t
 
 | If you want to… | Start here |
 |---|---|
+| Download the app or run it with one command | [Install](INSTALL.md) |
 | Use your own model keys — zero token markup | [Models & Providers](guides/models-and-providers.md) · [Models & Pricing](MODELS_AND_PRICING.md) |
 | Keep source code and prompts inside your infrastructure | [Self-Hosting](guides/self-hosting.md) · [Security](../SECURITY.md) |
 | Run the web app and drive agent tasks | [Getting Started](getting-started.md) |

@@ -8,6 +8,7 @@
 
 - [Documentation hub](docs/README.md): Index of all docs with reading paths per role
 - [README](README.md): Project overview, quick links, and quickstart
+- [Install](docs/INSTALL.md): Download the desktop app, one-line web-stack installers (Linux/macOS/Windows), VS Code extension, hosted setup, checksums
 
 - [Getting Started](docs/getting-started.md): Install, run, and complete your first agent task in 30 minutes
 - [Competitive Analysis](docs/COMPETITIVE_ANALYSIS.md): PolySwitch (polyswitch.io) head-to-head comparison, claim verification, adopt/defend conclusions and roadmap actions

@@ -34,7 +34,7 @@ win:
       arch:
         - x64
   icon: assets/icon.ico
-  artifactName: "${productName}-${version}-win-${arch}.${ext}"
+  artifactName: "AI-Harness-Setup-${arch}.${ext}"
 
 nsis:
   oneClick: false
@@ -44,6 +44,9 @@ nsis:
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: AI Harness
+
+portable:
+  artifactName: "AI-Harness-Portable-${arch}.${ext}"
 
 mac:
   target:
@@ -56,7 +59,7 @@ mac:
   hardenedRuntime: true
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
-  artifactName: "${productName}-${version}-mac-${arch}.${ext}"
+  artifactName: "AI-Harness-Setup-${arch}.${ext}"
 
 dmg:
   contents:
@@ -77,13 +80,13 @@ linux:
         - x64
   icon: assets/icon.png
   category: Development
-  artifactName: "${productName}-${version}-linux-${arch}.${ext}"
+  artifactName: "AI-Harness-Setup-${arch}.${ext}"
 
 appImage:
-  artifactName: "${productName}-${version}-linux-${arch}.${ext}"
+  artifactName: "AI-Harness-Setup-${arch}.${ext}"
 
 deb:
-  artifactName: "${productName}-${version}-linux-${arch}.${ext}"
+  artifactName: "AI-Harness-Setup-${arch}.${ext}"
 
 # Update feed for electron-updater: assets are uploaded to the GitHub release
 # (latest.yml + blockmap + installer). Builds run with --publish never; upload

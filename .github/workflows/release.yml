@@ -1,0 +1,172 @@
+# Builds installers for every platform from a version tag and publishes a
+# GitHub Release with checksums. Dispatch runs build without publishing
+# (validation only).
+#
+#   Tag flow:  bump desktop + extension versions -> commit -> git tag vX.Y.Z
+#              -> push -> installers + VSIX + SHA256SUMS land on the release
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: read
+
+jobs:
+  version-check:
+    name: Version matches tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify package versions match the tag (tag pushes only)
+        run: |
+          if [[ "$GITHUB_REF" != refs/tags/* ]]; then
+            echo "Not a tag push — skipping version check."
+            exit 0
+          fi
+          dv="$(node -p "require('./desktop/package.json').version")"
+          ev="$(node -p "require('./extensions/vscode/package.json').version")"
+          echo "tag=$GITHUB_REF_NAME desktop=$dv extension=$ev"
+          [[ "v$dv" == "$GITHUB_REF_NAME" ]] || { echo "::error::desktop version $dv != tag $GITHUB_REF_NAME"; exit 1; }
+          [[ "v$ev" == "$GITHUB_REF_NAME" ]] || { echo "::error::extension version $ev != tag $GITHUB_REF_NAME"; exit 1; }
+
+  win:
+    name: Windows installer
+    needs: [version-check]
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build:win -w desktop -- --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: win-installers
+          if-no-files-found: error
+          path: |
+            desktop/release2/AI-Harness-Setup-*
+            desktop/release2/AI-Harness-Portable-*
+            desktop/release2/latest.yml
+
+  mac:
+    name: macOS installers
+    needs: [version-check]
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build:mac -w desktop -- --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac-installers
+          if-no-files-found: error
+          path: |
+            desktop/release2/AI-Harness-Setup-*.dmg
+            desktop/release2/latest-mac.yml
+            desktop/release2/*.blockmap
+
+  linux:
+    name: Linux installers
+    needs: [version-check]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build:linux -w desktop -- --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-installers
+          if-no-files-found: error
+          path: |
+            desktop/release2/AI-Harness-Setup-*.AppImage
+            desktop/release2/AI-Harness-Setup-*.deb
+            desktop/release2/latest-linux.yml
+            desktop/release2/*.blockmap
+
+  vsix:
+    name: VS Code extension
+    needs: [version-check]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: extensions/vscode
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: extensions/vscode/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npx @vscode/vsce package --allow-missing-repository --skip-license
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vscode-extension
+          if-no-files-found: error
+          path: extensions/vscode/*.vsix
+
+  publish:
+    name: Publish GitHub release
+    needs: [win, mac, linux, vsix]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        run: |
+          cd dist
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+      - uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: dist/*
+          body: |
+            ## Download
+
+            | Platform | File |
+            |---|---|
+            | Windows (installer) | [AI-Harness-Setup-x64.exe](https://github.com/veerendrabotla/ai-harness/releases/latest/download/AI-Harness-Setup-x64.exe) |
+            | Windows (portable) | [AI-Harness-Portable-x64.exe](https://github.com/veerendrabotla/ai-harness/releases/latest/download/AI-Harness-Portable-x64.exe) |
+            | macOS (Apple silicon / Intel) | [AI-Harness-Setup-arm64.dmg](https://github.com/veerendrabotla/ai-harness/releases/latest/download/AI-Harness-Setup-arm64.dmg) / [AI-Harness-Setup-x64.dmg](https://github.com/veerendrabotla/ai-harness/releases/latest/download/AI-Harness-Setup-x64.dmg) |
+            | Linux | [AI-Harness-Setup-x64.AppImage](https://github.com/veerendrabotla/ai-harness/releases/latest/download/AI-Harness-Setup-x64.AppImage) / [AI-Harness-Setup-x64.deb](https://github.com/veerendrabotla/ai-harness/releases/latest/download/AI-Harness-Setup-x64.deb) |
+            | VS Code extension | `ai-harness-*.vsix` below — or install from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=ai-harness.ai-harness) |
+
+            Verify downloads with `SHA256SUMS.txt`.
+
+            ## Quick start (web stack, no clone needed)
+
+            Linux/macOS:
+
+            ```bash
+            curl -fsSL https://raw.githubusercontent.com/veerendrabotla/ai-harness/main/install.sh | bash
+            ```
+
+            Windows (PowerShell):
+
+            ```powershell
+            irm https://raw.githubusercontent.com/veerendrabotla/ai-harness/main/install.ps1 | iex
+            ```
+
+            Full guide: [docs/INSTALL.md](https://github.com/veerendrabotla/ai-harness/blob/main/docs/INSTALL.md)

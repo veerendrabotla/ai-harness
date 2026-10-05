@@ -8,7 +8,17 @@ Built from the product specifications in [`docs/`](docs) (PRD, APP_FLOW, TECH_ST
 
 **Private by default.** The full stack self-hosts on your own infrastructure: source code, prompts, plans, artifacts, and audit trails stay inside your servers. Only the context you explicitly approve is sent, and only to the model provider you configured.
 
-**Start here:** [Documentation hub](docs/README.md) · [Getting Started](docs/getting-started.md) · [Core Concepts](docs/concepts.md) · [Self-Hosting](docs/guides/self-hosting.md) · [Troubleshooting](docs/troubleshooting.md) · [`llms.txt`](llms.txt)
+**Start here:** [Install](docs/INSTALL.md) · [Documentation hub](docs/README.md) · [Getting Started](docs/getting-started.md) · [Core Concepts](docs/concepts.md) · [Self-Hosting](docs/guides/self-hosting.md) · [Troubleshooting](docs/troubleshooting.md) · [`llms.txt`](llms.txt)
+
+## Download / install
+
+| What | How |
+|---|---|
+| **Windows app** | [AI-Harness-Setup-x64.exe](https://github.com/veerendrabotla/ai-harness/releases/latest/download/AI-Harness-Setup-x64.exe) (or [portable](https://github.com/veerendrabotla/ai-harness/releases/latest/download/AI-Harness-Portable-x64.exe)) |
+| **Web stack (Linux/macOS)** | `curl -fsSL https://raw.githubusercontent.com/veerendrabotla/ai-harness/main/install.sh \| bash` |
+| **Web stack (Windows)** | `irm https://raw.githubusercontent.com/veerendrabotla/ai-harness/main/install.ps1 \| iex` |
+| **VS Code extension** | [Marketplace](https://marketplace.visualstudio.com/items?itemName=ai-harness.ai-harness) or `.vsix` from [Releases](https://github.com/veerendrabotla/ai-harness/releases/latest) |
+| **All platforms + checksums** | [docs/INSTALL.md](docs/INSTALL.md) · [Releases](https://github.com/veerendrabotla/ai-harness/releases) |
 
 ---
 
