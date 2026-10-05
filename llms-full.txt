@@ -3652,7 +3652,7 @@ Report security vulnerabilities to: security@aiharness.dev
 - Sandbox escape
 - Secret exposure
 
-<!-- ===== TODO_NEXT_PHASE.md (586 lines) ===== -->
+<!-- ===== TODO_NEXT_PHASE.md (600 lines) ===== -->
 # AI Harness — Phased Roadmap & Execution Log
 
 > **Process rule:** this file is APPEND-ONLY and ITERATIVE. Completed phases are never deleted — they stay documented below as the execution record. New work is always appended as the next phase section with status `PLANNED → IN PROGRESS → DONE` plus verification evidence.
@@ -4239,6 +4239,20 @@ Prioritized from a full Qoder feature comparison; we remain ahead on the 16-stat
 - [x] **Disk episode (recurring, cleared)**: image builds stalled at 0.67 GB -> **0.05 GB** free (WSL2 `docker_data.vhdx` 42.6 GB traps deleted-layer space; `diskpart compact` needs elevation - noted, not run). Clears: removed foreign `ghcr.io/phioranex/openclaw-docker` image (10.2 GB) + its exited container + 4 ancient hello-world containers; **moved** 11 re-downloadable installers (4.96 GB) from `Downloads` -> `D:\aiharness-archive\downloads` (moved, not deleted); %TEMP%/sandbox debris 2.6 GB. Ended at **5.05 GB free**; stack rebuilt and healthy throughout.
 - **Deferred with notes (roadmap 4-7)**: desktop installer publishing, connector catalog, status/legal pages, public pricing page - each needs product/legal decisions first; logged in `docs/COMPETITIVE_ANALYSIS.md` §6.
 - Gates: `typecheck` 0 - `lint` 0 - **full `npx vitest run --maxWorkers=4`: 70 files passed / 1 skipped, 689 tests passed / 22 skipped / 0 failed** (docker-isolation suite green this run) - `docs:llms-full` **45 docs drift OK** - live schedule E2E **ISSUES (0)** + DB evidence rows above - stack healthy (api healthy, worker ready, frontend 200, ollama up).
+
+### PHASE 18 execution log - public distribution: one-click downloads, one-line installs, CI-built releases - DONE
+
+- [x] **Stable download URLs**: version-less artifact names (`AI-Harness-Setup-x64.exe`, `AI-Harness-Portable-x64.exe`, mac `AI-Harness-Setup-{arch}.dmg`, linux `.AppImage`/`.deb`) so `releases/latest/download/...` links never rot; release v0.1.0 refreshed (old versioned assets replaced, `SHA256SUMS.txt` added, body rewritten with a Download table + one-line quick starts).
+- [x] **Desktop app found broken for normal users while testing end-to-end** - three defects fixed in `desktop/`: (1) packaged exe loaded `app://./index.html`, which is never bundled and has no protocol handler -> always "Failed to load"; (2) `files: "!node_modules/**/*"` shipped an empty app.asar, so the app crashed on require (`Cannot find module 'electron-updater'`); (3) nsis + portable targets shared one artifactName, so **portable silently overwrote the installer**. Also added the electron-updater GitHub publish feed (`latest.yml`) and `AI_HARNESS_FRONTEND_URL` (URL override, default localhost:3000). Proven as a normal user: download -> silent install exit=0 -> launches -> loads the web app (CDP PASS) -> uninstall clean, 0 leftovers.
+- [x] **GHCR images**: `.github/workflows/publish-images.yml` builds and pushes `ghcr.io/veerendrabotla/ai-harness-{api,worker,gateway,frontend}:latest` (+sha, +semver) on every main push with GHA cache. The workflow's **quickstart job is CI proof of the public path**: checkout -> `install.sh` -> compose pull from GHCR -> all 7 services healthy -> teardown (**green, 1m27s**).
+- [x] **One-line installers** `install.sh` / `install.ps1` (no clone): download `docker-compose.release.yml` + `.env.example` from the repo, generate fresh JWT/CSRF/encryption/bridge secrets, rewrite origins, auto-shift all ports +100 when busy, `COMPOSE_FILE` wiring, pull/boot/health-poll/print URL, update/stop instructions, `AI_H_CONFIG_ONLY=1` validation mode. Both scripts PASS config-mode locally (port detection exercised: 4000/5432/6379/4010 busy -> 4100/5532/6479/4110) and the full path PASSes in CI.
+- [x] **`docker-compose.release.yml`**: GHCR-based 7-service stack, `AI_H_PORT_*`/`AI_H_PREFIX` overrides, no repo files required (dev-only shadow-db bind mount removed after verifying `migrate.mjs` = `prisma migrate deploy`).
+- [x] **`release.yml` automated multi-platform releases**: tag `v*` -> version-check (desktop + extension must match tag) -> matrix build (windows/macos/ubuntu installers + `.vsix`) -> `SHA256SUMS.txt` -> GitHub release with Download table + generated notes; `workflow_dispatch` = build-only validation. Exercised by tag `v0.1.1`.
+- [x] **Findable place**: `docs/INSTALL.md` (all surfaces + checksums + hosting), README hero **Download / install** table, docs-hub row, `llms.txt` entry -> `llms-full` regenerated (**46 docs, drift OK**).
+- [x] **Two more bugs caught by the CI boot test**: raw.githubusercontent CDN 404 race at push time (CI now uses `file://$GITHUB_WORKSPACE` base) and `docker compose pull` missing the compose file (fixed with `COMPOSE_FILE`); GHCR pulls authenticated via `docker/login-action` with the workflow token.
+- **Needs the owner (cannot be done by CI)**: GHCR package visibility -> Public (4 packages, GitHub UI or `gh auth refresh -s read:packages` + API PATCH); VS Code Marketplace publisher account for `vsce publish`; winget/Homebrew/Chocolatey publisher manifests; Apple/Windows code-signing certificates. Statuses documented in `docs/INSTALL.md` §Status of package managers.
+- **Deferred**: Vercel/Railway "Deploy" button (needs the accounts), hosted SaaS demo (needs infra budget).
+- Gates: `typecheck` 0 - `lint` 0 - full `npx vitest run --maxWorkers=4`: **70 files / 689 passed / 22 skipped / 0 failed** (one load flake on run 1, clean rerun 2) - `docs:llms-full` **46 docs drift OK** - `gen-docker-manifests --check` OK - workflow YAML parse OK - `install.sh` + `install.ps1` config-mode PASS - NSIS install/run/uninstall PASS - CI **green** - publish-images incl. quickstart **green**.
 
 <!-- ===== TOOL_GUIDE.md (195 lines) ===== -->
 # AI Harness — Tool Guide
