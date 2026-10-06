@@ -212,9 +212,10 @@ describe("Google adapter wire contract (vs local mock HTTP server)", () => {
     expect(response.text).toBe("gemi-ni says hi");
     expect(response.usage).toEqual({ inputTokens: 12, outputTokens: 9 });
     expect(response.finishReason).toBe("STOP");
-    // @google/genai 1.0.1: the mldev (Gemini API, non-Vertex) response converter
-    // does not map responseId, so providerRequestId is null on this path.
-    expect(response.providerRequestId).toBeNull();
+    // @google/genai >=1.52: the mldev (Gemini API, non-Vertex) response converter
+    // maps responseId through, so providerRequestId carries the provider id.
+    // (1.0.1 dropped it — the reason this assertion originally expected null.)
+    expect(response.providerRequestId).toBe("resp-abc-123");
     expect(response.modelIdentifier).toBe("gemini-2.0-flash");
     expect(response.providerType).toBe("GOOGLE");
   });

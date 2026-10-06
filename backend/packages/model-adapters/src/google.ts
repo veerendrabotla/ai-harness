@@ -9,7 +9,7 @@ import {
   type ProviderConnectionRef,
 } from "./types.js";
 
-/** Google Gemini adapter (@google/genai 1.0.1). */
+/** Google Gemini adapter (@google/genai ^1.x). */
 export class GoogleAdapter implements ModelAdapter {
   readonly providerType: ProviderType = "GOOGLE";
 

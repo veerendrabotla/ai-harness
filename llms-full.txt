@@ -3677,7 +3677,7 @@ Report security vulnerabilities to: security@aiharness.dev
 - Sandbox escape
 - Secret exposure
 
-<!-- ===== TODO_NEXT_PHASE.md (628 lines) ===== -->
+<!-- ===== TODO_NEXT_PHASE.md (637 lines) ===== -->
 # AI Harness — Phased Roadmap & Execution Log
 
 > **Process rule:** this file is APPEND-ONLY and ITERATIVE. Completed phases are never deleted — they stay documented below as the execution record. New work is always appended as the next phase section with status `PLANNED → IN PROGRESS → DONE` plus verification evidence.
@@ -4306,6 +4306,15 @@ Prioritized from a full Qoder feature comparison; we remain ahead on the 16-stat
 - [x] **Docs**: `EXTERNAL_DEPLOYMENT_CHECKLIST.md` section 6 rewritten as the services-mode runbook (Framework Preset = Services, env matrix incl. empty `NEXT_PUBLIC_API_URL` and required `FRONTEND_ORIGIN` for the CSRF Origin allowlist + socket CORS, no `COOKIE_SAMESITE=none` needed same-origin, OAuth callback paths, worker exclusion, beta/WS caveats); `docs/INSTALL.md` section 6 (services runbook + split-origin variant retained); README Option C; `frontend/.env.example` (empty-string guidance). Split-origin PHASE 19 content stays valid for the Vercel-frontend + API-elsewhere shape.
 - **Needs the owner**: (1) confirm service names / public paths / bindings (decision pending); (2) Vercel account: import repo, Framework Preset = `Services`, set the project env matrix, first deploy; (3) host worker elsewhere (BullMQ loop cannot be a request-triggered function; tasks queue until it starts); (4) first `vercel build` is the real proof for the Fastify preset + function tracing of externals - iterate if the adapter wants a different export shape.
 - Gates: `typecheck` 0 - `lint` 0 - full `npx vitest run --maxWorkers=4`: **73 files passed / 1 skipped / 0 failed** (first attempt had 3 files flake at 15s timeouts because the frontend build ran in parallel; isolation rerun 3/3 green, then clean full run green) - `npm -w frontend run build` 0 (sw.js restored) - `gen-llms` + `--check` OK - `gen-docker-manifests --check` OK.
+
+### PHASE 20 addendum - post-push security audit (CI red at ccb4d72..8c11b68 gate)
+
+- [x] **CI Security audit started failing on 8c11b68 with 0 code/lockfile changes from that commit**: advisories published between runs (the audit DB moves independently of the repo). Found: proxy-addr **critical** (IPv4-mapped IPv6 trust bypass), source-map-js **high** (event-loop DoS), gaxios+uuid **moderate** (uuid buffer bounds via google-auth-library chain).
+- [x] **Fix**: `npm audit fix --omit=dev` (proxy-addr 2.0.7 -> 2.0.8, postcss/source-map-js dedup) plus in-range `npm update @google/genai` **1.0.1 -> 1.52.0** (still `^1.0.1` in both manifests): google-auth-library ^9 -> ^10.3.0 -> **gaxios 7.3.1 which has no uuid dependency at all** -> clears the remaining moderates. No manifest changes, no majors (checked: gaxios 6.x has no fixed release - 6.7.1 is the last - so the chain bump was the only non-force fix; `@modelcontextprotocol/sdk` peer of 1.52.0 is optional).
+- [x] **Behavior delta from the SDK bump**: the mldev response converter now maps `responseId` through (`wire-contract.test.ts` expectation updated 1.0.1-quirk null -> `resp-abc-123`); request-side wire (URL, systemInstruction, generationConfig) unchanged - all other adapter tests green. Docstring updated.
+- [x] **Local incident during the fix**: `npm audit fix` (full tree) was killed by a 5-min tool timeout mid-install and `npm update --omit=dev` pruned devDependencies from node_modules -> typecheck/lint died with "Cannot find module 'vitest'"/"'eslint' not recognized". Recovery: plain `npm install` restored the dev tree from the (intact) lockfile; re-ran gates green.
+- [x] **Docker daemon death (environment, not code)**: the machine hit **0 GB disk free** mid-session (npm churn + builds on top of the already-tight disk) -> `docker info` fails, docker-isolation tests error/timeout even in isolation. Freed via `npm cache clean --force` + deleting regenerable `frontend/.next` (0.36 -> 0.61 GB). docker-isolation runs on GitHub runners in CI (passed there on every prior SHA; untouched by this changeset) - CI is the authority for it.
+- Gates (this addendum): `npm audit --omit=dev --audit-level=high` **exit 0, found 0 vulnerabilities** - `typecheck` 0 - `lint` 0 - vitest 72/73 green incl. the fixed wire-contract (only docker-isolation blocked by the local daemon; CI reruns it clean) - frontend build/llms unchanged by this lockfile-only addendum.
 
 <!-- ===== TOOL_GUIDE.md (195 lines) ===== -->
 # AI Harness — Tool Guide
