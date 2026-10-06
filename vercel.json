@@ -1,0 +1,43 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "services": {
+    "frontend": {
+      "root": "frontend",
+      "framework": "nextjs",
+      "installCommand": "[ -f package-lock.json ] || cd ../..; npm ci --no-audit --no-fund"
+    },
+    "api": {
+      "root": "backend/apps/api",
+      "framework": "fastify",
+      "entrypoint": ".service/index.js",
+      "installCommand": "[ -f package-lock.json ] || cd ../..; npm ci --no-audit --no-fund",
+      "buildCommand": "[ -f package-lock.json ] || cd ../..; npx prisma generate --schema=backend/prisma/schema.prisma && node scripts/migrate.mjs && node scripts/build-backend.mjs api && mkdir -p backend/apps/api/.service && cp dist/api/index.js backend/apps/api/.service/index.js",
+      "bindings": [
+        {
+          "type": "service",
+          "service": "bridge-gateway",
+          "format": "url",
+          "env": "BRIDGE_GATEWAY_URL"
+        }
+      ]
+    },
+    "bridge-gateway": {
+      "root": "backend/apps/bridge-gateway",
+      "runtime": "node",
+      "entrypoint": ".service/index.js",
+      "installCommand": "[ -f package-lock.json ] || cd ../..; npm ci --no-audit --no-fund",
+      "buildCommand": "[ -f package-lock.json ] || cd ../..; npx prisma generate --schema=backend/prisma/schema.prisma && node scripts/build-backend.mjs gateway && mkdir -p backend/apps/bridge-gateway/.service && cp dist/gateway/index.js backend/apps/bridge-gateway/.service/index.js"
+    }
+  },
+  "rewrites": [
+    { "source": "/v1/(.*)", "destination": { "service": "api" } },
+    { "source": "/healthz", "destination": { "service": "api" } },
+    { "source": "/docs", "destination": { "service": "api" } },
+    { "source": "/docs/(.*)", "destination": { "service": "api" } },
+    { "source": "/socket.io", "destination": { "service": "api" } },
+    { "source": "/socket.io/(.*)", "destination": { "service": "api" } },
+    { "source": "/multiplayer", "destination": { "service": "api" } },
+    { "source": "/bridge", "destination": { "service": "bridge-gateway" } },
+    { "source": "/(.*)", "destination": { "service": "frontend" } }
+  ]
+}

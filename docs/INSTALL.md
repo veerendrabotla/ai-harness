@@ -75,21 +75,25 @@ Multi-terminal dev mode, tests, and the first-task walkthrough: [Getting Started
 
 ## 6. Hosting it for a team
 
-### Frontend on Vercel (live URL, ~10 min)
+### Everything on Vercel — services mode (live URL, ~10 min)
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/veerendrabotla/ai-harness&env=NEXT_PUBLIC_API_URL)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/veerendrabotla/ai-harness)
 
-1. Import this repo at [vercel.com/new](https://vercel.com/new) (the button does it) → set **Root Directory = `frontend`** (Settings → General — required, this is an npm-workspaces monorepo). Build & Output stay auto-detected (`next build`).
+The repo's root `vercel.json` deploys three services on one domain: `frontend` (Next.js), `api` (Fastify — `/v1/*`, `/healthz`, `/docs`, `/socket.io`, `/multiplayer`) and `bridge-gateway` (`/bridge`). The api service discovers the gateway via a binding (`BRIDGE_GATEWAY_URL`, injected at runtime).
+
+1. Import this repo (the button does it) → Settings → General → **Framework Preset = `Services`** (required: otherwise Vercel ignores the `services` key and builds a single app).
 2. Project env vars (Settings → Environment Variables):
-   - `NEXT_PUBLIC_API_URL` — your API origin, e.g. `https://api.example.com`. Required **before** the first build; it is baked into the bundle.
-   - optional `NEXT_PUBLIC_POSTHOG_KEY` / `NEXT_PUBLIC_POSTHOG_HOST`.
-3. Deploy, then copy the production domain (`https://<project>.vercel.app`).
-4. Point the API at it (API host `.env` → restart api):
-   - `FRONTEND_ORIGIN=https://<project>.vercel.app` — CORS, CSRF allowlist and socket origins (comma-separated for several).
-   - `COOKIE_SAMESITE=none` — app and API are different sites, so auth cookies must be `SameSite=None; Secure`; browsers accept that only over `https://` or `localhost`.
-5. Done — every push to `main` redeploys automatically (Vercel Git integration).
+   - `NEXT_PUBLIC_API_URL=` — **leave empty**: the web app then calls same-origin `/v1/*`.
+   - `FRONTEND_ORIGIN=https://<project>.vercel.app` — CORS, the CSRF Origin allowlist (the client relies on it; it sends no `X-CSRF-Token`) and socket.io origin checks.
+   - `DATABASE_URL` (host-reachable Postgres), `REDIS_URL` (e.g. Upstash), `JWT_ACCESS_SECRET`, `CSRF_SECRET`, `ENCRYPTION_KEY`, `BRIDGE_INTERNAL_TOKEN` — the api build runs `prisma migrate deploy`, so `DATABASE_URL` must be set before the first deploy. Never add `BRIDGE_GATEWAY_URL` (binding-injected).
+   - Optional: `NEXT_PUBLIC_POSTHOG_KEY` / `NEXT_PUBLIC_POSTHOG_HOST`, `SENTRY_DSN`.
+3. Deploy, then copy the production domain. Same site for web + API ⇒ `SameSite=Lax` cookies just work — no `COOKIE_SAMESITE=none`.
+4. OAuth redirect URIs: `https://<domain>/v1/auth/github/callback` (and Google equivalent).
+5. Done — every push to `main` redeploys all three services (Vercel Git integration). Verify `https://<domain>/healthz` and `/docs`.
 
-Split-origin auth is handled in code: the frontend mirrors the session cookie onto its own origin, so middleware-protected routes work across domains. With a **local** API (`http://localhost:4000`) the hosted page works only on your machine — for a team, host the backend too:
+Not deployed to Vercel: the **worker** (long-running BullMQ consumer) — run it on any Docker host with the one-liners above or the paths in [Self-Hosting](guides/self-hosting.md); tasks simply queue until it runs. Services is a beta feature; WebSockets use Vercel's public beta (polling fallback enabled in the client).
+
+Split-origin variant (web on Vercel, API somewhere else) is still supported: set `NEXT_PUBLIC_API_URL` to the API origin, add that origin to the API's `FRONTEND_ORIGIN`, and set the API's `COOKIE_SAMESITE=none` — the frontend mirrors the session cookie onto its own origin in code:
 
 ### Backend anywhere Docker runs
 

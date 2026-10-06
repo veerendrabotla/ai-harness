@@ -108,11 +108,11 @@ npm run db:generate      # generates prisma client (REQUIRED before first start)
 npm run db:migrate       # applies prisma migrations
 ```
 
-### Option C — hosted frontend (Vercel)
+### Option C — host everything on Vercel (services mode)
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/veerendrabotla/ai-harness&env=NEXT_PUBLIC_API_URL)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/veerendrabotla/ai-harness)
 
-Import the repo, set **Root Directory = `frontend`**, set env `NEXT_PUBLIC_API_URL` to your API origin, then add the Vercel domain to the API's `FRONTEND_ORIGIN` and set `COOKIE_SAMESITE=none` (cross-site cookies). Pushes to `main` redeploy automatically. Full runbook: [docs/INSTALL.md](docs/INSTALL.md#6-hosting-it-for-a-team).
+Import the repo, set the project's **Framework Preset to `Services`** (the root `vercel.json` deploys `frontend` + `api` + `bridge-gateway` on one domain, rewrites `/v1/*`, `/healthz`, `/docs`, `/socket.io`, `/multiplayer` → api and `/bridge` → gateway), then set env: `NEXT_PUBLIC_API_URL` **empty**, `FRONTEND_ORIGIN=https://<domain>`, plus `DATABASE_URL`, `REDIS_URL`, `JWT_ACCESS_SECRET`, `CSRF_SECRET`, `ENCRYPTION_KEY`, `BRIDGE_INTERNAL_TOKEN`. The worker runs on any Docker host (it is a queue consumer, not a web endpoint). Full runbook: [docs/INSTALL.md](docs/INSTALL.md#6-hosting-it-for-a-team).
 
 ## Running locally (3 terminals)
 

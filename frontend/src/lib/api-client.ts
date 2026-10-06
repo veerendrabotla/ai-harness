@@ -1,7 +1,9 @@
 /**
  * API base URL — resolved at RUNTIME so Docker deployments can inject it
  * via /env.js (window.__ENV__.API_URL) without rebuilding the image.
- * Build-time NEXT_PUBLIC_API_URL is the fallback for local dev.
+ * Build-time NEXT_PUBLIC_API_URL is the fallback for local dev; setting it
+ * to an empty string means same-origin (Vercel services routing sends
+ * /v1/* to the api service on this domain).
  */
 function resolveApiUrl(): string {
   if (typeof window !== "undefined") {
@@ -126,3 +128,14 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
 }
 
 export const apiUrl = API_URL;
+
+/**
+ * Absolute origin of the API for URL builders that cannot take relative
+ * URLs (socket.io, y-websocket). An empty API_URL means same-origin, so
+ * resolve against the page origin.
+ */
+export function apiOrigin(): string {
+  if (API_URL) return API_URL;
+  if (typeof window !== "undefined") return window.location.origin;
+  return "http://localhost:4000";
+}

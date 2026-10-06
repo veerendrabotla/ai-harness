@@ -18,7 +18,7 @@ import {
 } from "react";
 import * as Y from "yjs";
 import { WebsocketProvider } from "y-websocket";
-import { apiUrl } from "@/lib/api-client";
+import { apiOrigin } from "@/lib/api-client";
 import { useAuthStore } from "@/lib/auth-store";
 
 export interface MultiplayerUser {
@@ -102,7 +102,10 @@ export function MultiplayerProvider({ children }: { children: ReactNode }) {
     docRef.current = yDoc;
     setDoc(yDoc);
 
-    const wsUrl = apiUrl.replace(/^http/, "ws");
+    // y-websocket appends "/<roomname>" to serverUrl; the gateway serves
+    // /multiplayer (with an optional room suffix) and reads taskId/token
+    // from the query string.
+    const wsUrl = `${apiOrigin()}/multiplayer`.replace(/^http/, "ws");
     const wsProvider = new WebsocketProvider(wsUrl, `task-${taskId}`, yDoc, {
       connect: true,
       params: { taskId, token },

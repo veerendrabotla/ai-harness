@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { io, type Socket } from "socket.io-client";
 import { useAuthStore } from "@/lib/auth-store";
-import { apiUrl } from "@/lib/api-client";
+import { apiOrigin } from "@/lib/api-client";
 
 let globalSocket: Socket | null = null;
 
@@ -12,9 +12,11 @@ export function getSocket(): Socket {
   if (globalSocket) globalSocket.disconnect();
 
   const token = useAuthStore.getState().accessToken;
-  globalSocket = io(apiUrl, {
+  globalSocket = io(apiOrigin(), {
     auth: { token },
-    transports: ["websocket"],
+    // Prefer WebSocket; fall back to long-polling where upgrades are
+    // blocked (e.g. behind proxies that don't forward WS upgrades).
+    transports: ["websocket", "polling"],
     autoConnect: false,
   });
   globalSocket.connect();

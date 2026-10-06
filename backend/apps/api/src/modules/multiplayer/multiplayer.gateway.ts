@@ -187,8 +187,12 @@ export function initMultiplayerGateway(server: import("node:http").Server): void
 
   server.on("upgrade", (req: IncomingMessage, socket, head) => {
     const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
-    if (url.pathname !== "/multiplayer") {
-      socket.destroy();
+    // Only claim /multiplayer (optionally with a room suffix). Other paths
+    // (notably /socket.io owned by engine.io) must be left untouched — a
+    // destroy() here kills legitimate socket.io WebSocket upgrades because
+    // engine.io already completed its own 101 handshake by the time this
+    // listener runs.
+    if (url.pathname !== "/multiplayer" && !url.pathname.startsWith("/multiplayer/")) {
       return;
     }
     wss.handleUpgrade(req, socket, head, (ws) => {

@@ -11,6 +11,8 @@ build/
 release/
 release2/
 *.tsbuildinfo
+# per-service esbuild output for Vercel services (vercel.json buildCommand)
+.service/
 
 # env & secrets
 .env
